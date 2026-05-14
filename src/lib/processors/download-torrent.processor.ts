@@ -31,12 +31,15 @@ export async function processDownloadTorrent(payload: DownloadTorrentPayload): P
 
   try {
     // Update request status to downloading
-    await prisma.request.update({
+    const request = await prisma.request.update({
       where: { id: requestId },
       data: {
         status: 'downloading',
         progress: 0,
         updatedAt: new Date(),
+      },
+      include: {
+        user: { select: { plexUsername: true } },
       },
     });
 
@@ -103,30 +106,20 @@ export async function processDownloadTorrent(payload: DownloadTorrentPayload): P
 
     logger.info(`Created download history record: ${downloadHistory.id}`);
 
-    // Send grab notification
-    const requestWithUser = await prisma.request.findUnique({
-      where: { id: requestId },
-      include: {
-        user: { select: { plexUsername: true } },
-      },
-    });
-
+    // Send grab notification (non-blocking — failures here don't fail the download)
     const jobQueue = getJobQueueService();
-
-    if (requestWithUser) {
-      const grabMessage = `${torrent.title} via ${torrent.indexer} (${client.clientType})`;
-      await jobQueue.addNotificationJob(
-        'request_grabbed',
-        requestId,
-        audiobook.title,
-        audiobook.author,
-        requestWithUser.user.plexUsername || 'Unknown User',
-        grabMessage,
-        requestWithUser.type
-      ).catch((error) => {
-        logger.error('Failed to queue grab notification', { error: error instanceof Error ? error.message : String(error) });
-      });
-    }
+    const grabMessage = `${torrent.title} via ${torrent.indexer} (${client.clientType})`;
+    await jobQueue.addNotificationJob(
+      'request_grabbed',
+      requestId,
+      audiobook.title,
+      audiobook.author,
+      request.user.plexUsername || 'Unknown User',
+      grabMessage,
+      request.type
+    ).catch((error) => {
+      logger.error('Failed to queue grab notification', { error: error instanceof Error ? error.message : String(error) });
+    });
 
     // Trigger monitor download job with initial delay
     await jobQueue.addMonitorJob(

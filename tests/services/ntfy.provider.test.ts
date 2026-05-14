@@ -267,6 +267,64 @@ describe('NtfyProvider', () => {
     });
   });
 
+  describe('messageLabel rendering by event', () => {
+    const basePayload = {
+      requestId: 'req-1',
+      title: 'Test Book',
+      author: 'Test Author',
+      userName: 'Test User',
+      timestamp: new Date('2024-01-01T00:00:00Z'),
+    };
+
+    it('renders "⚠️ Error:" with error emoji for request_error', async () => {
+      fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: 'msg' }) });
+      const { NtfyProvider } = await import('@/lib/services/notification');
+      const provider = new NtfyProvider();
+
+      await provider.send(
+        { topic: 'audiobooks' },
+        { ...basePayload, event: 'request_error', message: 'Boom' }
+      );
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.message).toContain('⚠️ Error: Boom');
+      expect(body.message).not.toContain('📝');
+    });
+
+    it('renders "📝 Reason:" with note emoji for issue_reported', async () => {
+      fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: 'msg' }) });
+      const { NtfyProvider } = await import('@/lib/services/notification');
+      const provider = new NtfyProvider();
+
+      await provider.send(
+        { topic: 'audiobooks' },
+        { ...basePayload, event: 'issue_reported', issueId: 'iss-1', message: 'Chapter 3 cuts off' }
+      );
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.message).toContain('📝 Reason: Chapter 3 cuts off');
+      expect(body.message).not.toContain('⚠️');
+      expect(body.message).not.toContain('Error:');
+    });
+
+    it('renders "📝 Details:" with note emoji for request_grabbed', async () => {
+      fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: 'msg' }) });
+      const { NtfyProvider } = await import('@/lib/services/notification');
+      const provider = new NtfyProvider();
+
+      await provider.send(
+        { topic: 'audiobooks' },
+        { ...basePayload, event: 'request_grabbed', message: 'Test Book [M4B] via NZBGeek (SABnzbd)', requestType: 'audiobook' }
+      );
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.message).toContain('📝 Details: Test Book [M4B] via NZBGeek (SABnzbd)');
+      expect(body.message).not.toContain('⚠️');
+      expect(body.message).not.toContain('Error:');
+      expect(body.title).toBe('Audiobook Grabbed');
+    });
+  });
+
   describe('integration with NotificationService.sendToBackend', () => {
     it('decrypts accessToken and sends to ntfy', async () => {
       fetchMock.mockResolvedValue({

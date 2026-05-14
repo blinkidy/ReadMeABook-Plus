@@ -33,7 +33,7 @@ model NotificationBackend {
 |-------|---------|------------------------|
 | request_pending_approval | User creates request | Request needs admin approval |
 | request_approved | Admin approves OR auto-approval | Request approved (manual or auto) |
-| request_grabbed | Torrent/NZB added to download client | Download handed off to configured download client (title resolves by type) |
+| request_grabbed | Torrent/NZB added to download client | Download handed off to configured download client (title resolves by type) — **opt-in: existing backends do not auto-subscribe; enable in Settings** |
 | request_available | Plex/ABS scan or ebook download completes | Request available (title resolves by type) |
 | request_error | Download/import fails | Request failed at any stage |
 | issue_reported | User reports issue | User reports problem with available audiobook |
