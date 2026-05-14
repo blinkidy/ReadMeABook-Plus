@@ -4,21 +4,26 @@
  */
 
 import axios, { AxiosInstance } from 'axios';
+import * as cheerio from 'cheerio';
 import { RMABLogger } from '../utils/logger';
 import { getConfigService } from '../services/config.service';
 import { AudibleRegion, AUDIBLE_REGIONS, DEFAULT_AUDIBLE_REGION } from '../types/audible';
 import {
   getLanguageForRegion,
   isAcceptedLanguage,
+  stripPrefixes,
+  buildContainsSelector,
+  type LanguageConfig,
 } from '../constants/language-config';
 import {
   pickUserAgent,
   getBrowserHeaders,
   jitteredBackoff,
-  randomDelay,
   AdaptivePacer,
   FetchResultMeta,
 } from '../utils/scrape-resilience';
+import { parseRuntime as parseRuntimeUtil } from '../utils/parse-runtime';
+import { extractAllNarrators } from '../utils/extract-narrator';
 
 const logger = RMABLogger.create('Audible');
 
@@ -26,6 +31,13 @@ const AUDIBLE_PAGE_SIZE = 50;
 
 const CATALOG_RESPONSE_GROUPS =
   'contributors,product_desc,product_attrs,product_extended_attrs,media,rating,series,category_ladders,product_details';
+
+// Retry/backoff knobs for HTML scraping (nightly refresh job only).
+// Healthy users still finish quickly — per-page success returns on attempt 0
+// with a 2-4s inter-page delay. Struggling users grind through 503 storms
+// patiently: up to ~12 retries per request, with each backoff capped at 3 min.
+const HTML_MAX_RETRIES = 12;
+const HTML_MAX_BACKOFF_MS = 180_000;
 
 export interface AudibleAudiobook {
   asin: string;
@@ -298,6 +310,7 @@ export class AudibleService {
     config: any = {},
     maxRetries: number = 5,
     client: AxiosInstance = this.htmlClient,
+    maxBackoffMs: number = Number.POSITIVE_INFINITY,
   ): Promise<{ data: any; meta: FetchResultMeta }> {
     let lastError: Error | null = null;
     let retriesUsed = 0;
@@ -324,7 +337,7 @@ export class AudibleService {
 
         retriesUsed++;
 
-        const backoffMs = jitteredBackoff(attempt);
+        const backoffMs = jitteredBackoff(attempt, 1000, maxBackoffMs);
         logger.info(
           ` Request failed (${status || 'network error'}), retrying in ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries})...`,
         );
@@ -379,6 +392,12 @@ export class AudibleService {
     throw lastError || new Error('External API request failed after retries');
   }
 
+  /**
+   * Popular audiobooks from Audible's curated /adblbestsellers HTML page.
+   * Uses HTML scraping (not the catalog API) because the API's BestSellers sort
+   * is a right-now velocity rank that surfaces launch-day shovelware and preorders;
+   * the HTML page reflects Audible's editorial curation.
+   */
   async getPopularAudiobooks(limit: number = 20): Promise<AudibleAudiobook[]> {
     await this.initialize();
 
@@ -395,42 +414,36 @@ export class AudibleService {
         logger.info(` Fetching page ${page}/${maxPages}...`);
 
         const { data: response, meta } = await this.fetchWithRetry(
-          '/1.0/catalog/products',
+          '/adblbestsellers',
           {
             params: {
-              products_sort_by: 'BestSellers',
-              num_results: AUDIBLE_PAGE_SIZE,
-              page: page - 1,
-              response_groups: CATALOG_RESPONSE_GROUPS,
+              ipRedirectOverride: 'true',
+              pageSize: AUDIBLE_PAGE_SIZE,
+              ...(page > 1 ? { page } : {}),
             },
           },
-          5,
-          this.apiClient,
+          HTML_MAX_RETRIES,
+          this.htmlClient,
+          HTML_MAX_BACKOFF_MS,
         );
 
-        const envelope: CatalogProductsResponse = response.data;
-        const products = envelope.products ?? [];
-        const totalResults = envelope.total_results ?? 0;
+        const foundOnPage = this.parseProductListItems(
+          response.data,
+          audiobooks,
+          limit,
+        );
 
-        for (const product of products) {
-          if (audiobooks.length >= limit) break;
-          if (audiobooks.some((b) => b.asin === product.asin)) continue;
-          audiobooks.push(mapCatalogProduct(product));
+        logger.info(` Found ${foundOnPage} audiobooks on page ${page}`);
+
+        if (foundOnPage < AUDIBLE_PAGE_SIZE / 2) {
+          logger.info(` Reached end of available pages`);
+          break;
         }
-
-        logger.info(` Found ${products.length} audiobooks on page ${page}`);
-
-        const hasMore =
-          totalResults > 0
-            ? totalResults > page * AUDIBLE_PAGE_SIZE
-            : products.length >= AUDIBLE_PAGE_SIZE;
-
-        if (!hasMore) break;
 
         page++;
 
         if (page <= maxPages && audiobooks.length < limit) {
-          await this.delay(this.apiPageDelay(meta));
+          await this.delay(this.pacer.reportPageResult(meta));
         }
       } catch (error) {
         logger.error(`Failed to fetch page ${page} of popular audiobooks`, {
@@ -445,6 +458,11 @@ export class AudibleService {
     return audiobooks;
   }
 
+  /**
+   * New release audiobooks from Audible's curated /newreleases HTML page.
+   * Uses HTML scraping (not the catalog API) because the API's -ReleaseDate sort
+   * returns 100% future preorders with no released-only filter available.
+   */
   async getNewReleases(limit: number = 20): Promise<AudibleAudiobook[]> {
     await this.initialize();
 
@@ -461,42 +479,36 @@ export class AudibleService {
         logger.info(` Fetching page ${page}/${maxPages}...`);
 
         const { data: response, meta } = await this.fetchWithRetry(
-          '/1.0/catalog/products',
+          '/newreleases',
           {
             params: {
-              products_sort_by: '-ReleaseDate',
-              num_results: AUDIBLE_PAGE_SIZE,
-              page: page - 1,
-              response_groups: CATALOG_RESPONSE_GROUPS,
+              ipRedirectOverride: 'true',
+              pageSize: AUDIBLE_PAGE_SIZE,
+              ...(page > 1 ? { page } : {}),
             },
           },
-          5,
-          this.apiClient,
+          HTML_MAX_RETRIES,
+          this.htmlClient,
+          HTML_MAX_BACKOFF_MS,
         );
 
-        const envelope: CatalogProductsResponse = response.data;
-        const products = envelope.products ?? [];
-        const totalResults = envelope.total_results ?? 0;
+        const foundOnPage = this.parseProductListItems(
+          response.data,
+          audiobooks,
+          limit,
+        );
 
-        for (const product of products) {
-          if (audiobooks.length >= limit) break;
-          if (audiobooks.some((b) => b.asin === product.asin)) continue;
-          audiobooks.push(mapCatalogProduct(product));
+        logger.info(` Found ${foundOnPage} audiobooks on page ${page}`);
+
+        if (foundOnPage < AUDIBLE_PAGE_SIZE / 2) {
+          logger.info(` Reached end of available pages`);
+          break;
         }
-
-        logger.info(` Found ${products.length} audiobooks on page ${page}`);
-
-        const hasMore =
-          totalResults > 0
-            ? totalResults > page * AUDIBLE_PAGE_SIZE
-            : products.length >= AUDIBLE_PAGE_SIZE;
-
-        if (!hasMore) break;
 
         page++;
 
         if (page <= maxPages && audiobooks.length < limit) {
-          await this.delay(this.apiPageDelay(meta));
+          await this.delay(this.pacer.reportPageResult(meta));
         }
       } catch (error) {
         logger.error(`Failed to fetch page ${page} of new releases`, {
@@ -791,6 +803,11 @@ export class AudibleService {
     }
   }
 
+  /**
+   * Category audiobooks from Audible's HTML /search?node=<categoryId> page,
+   * sorted by popularity-rank. Uses HTML scraping (not the catalog API) so
+   * results match Audible's curated category-storefront ordering.
+   */
   async getCategoryBooks(categoryId: string, limit: number = 200): Promise<AudibleAudiobook[]> {
     await this.initialize();
 
@@ -805,43 +822,35 @@ export class AudibleService {
     while (audiobooks.length < limit && page <= maxPages) {
       try {
         const { data: response, meta } = await this.fetchWithRetry(
-          '/1.0/catalog/products',
+          '/search',
           {
             params: {
-              category_id: categoryId,
-              products_sort_by: 'BestSellers',
-              num_results: AUDIBLE_PAGE_SIZE,
-              page: page - 1,
-              response_groups: CATALOG_RESPONSE_GROUPS,
+              ipRedirectOverride: 'true',
+              node: categoryId,
+              pageSize: AUDIBLE_PAGE_SIZE,
+              sort: 'popularity-rank',
+              ...(page > 1 ? { page } : {}),
             },
           },
-          5,
-          this.apiClient,
+          HTML_MAX_RETRIES,
+          this.htmlClient,
+          HTML_MAX_BACKOFF_MS,
         );
 
-        const envelope: CatalogProductsResponse = response.data;
-        const products = envelope.products ?? [];
-        const totalResults = envelope.total_results ?? 0;
+        const foundOnPage = this.parseSearchResultItems(
+          response.data,
+          audiobooks,
+          limit,
+        );
 
-        for (const product of products) {
-          if (audiobooks.length >= limit) break;
-          if (audiobooks.some((b) => b.asin === product.asin)) continue;
-          audiobooks.push(mapCatalogProduct(product));
-        }
+        logger.info(`Category ${categoryId}: found ${foundOnPage} books on page ${page}`);
 
-        logger.info(`Category ${categoryId}: found ${products.length} books on page ${page}`);
-
-        const hasMore =
-          totalResults > 0
-            ? totalResults > page * AUDIBLE_PAGE_SIZE
-            : products.length >= AUDIBLE_PAGE_SIZE;
-
-        if (!hasMore) break;
+        if (foundOnPage < AUDIBLE_PAGE_SIZE / 2) break;
 
         page++;
 
         if (page <= maxPages && audiobooks.length < limit) {
-          await this.delay(this.apiPageDelay(meta));
+          await this.delay(this.pacer.reportPageResult(meta));
         }
       } catch (error) {
         logger.error(`Failed to fetch category ${categoryId} page ${page}`, {
@@ -858,12 +867,148 @@ export class AudibleService {
     return audiobooks;
   }
 
-  private apiPageDelay(meta: FetchResultMeta): number {
-    if (meta.retriesUsed > 0) {
-      return this.pacer.reportPageResult(meta);
-    }
-    this.pacer.reportPageResult(meta);
-    return randomDelay(500, 1500);
+  private getLangConfig(): LanguageConfig {
+    return getLanguageForRegion(this.region);
+  }
+
+  private parseRuntime(runtimeText: string): number | undefined {
+    return parseRuntimeUtil(runtimeText, this.getLangConfig());
+  }
+
+  /**
+   * Parse the `.productListItem` blocks used by /adblbestsellers and /newreleases.
+   * Pushes matched books into `audiobooks` (skipping duplicates and respecting `limit`)
+   * and returns the count parsed from this page.
+   */
+  private parseProductListItems(
+    html: string,
+    audiobooks: AudibleAudiobook[],
+    limit: number,
+  ): number {
+    const $ = cheerio.load(html);
+    const langConfig = this.getLangConfig();
+    let foundOnPage = 0;
+
+    $('.productListItem').each((_index, element) => {
+      if (audiobooks.length >= limit) return false;
+
+      const $el = $(element);
+
+      const asin =
+        $el.find('li').attr('data-asin') ||
+        $el.find('a').attr('href')?.match(/\/(?:pd|ac)\/[^\/]+\/([A-Z0-9]{10})/)?.[1] ||
+        '';
+      if (!asin) return;
+      if (audiobooks.some((book) => book.asin === asin)) return;
+
+      const title =
+        $el.find('h3 a').text().trim() ||
+        $el.find('.bc-heading a').text().trim();
+
+      const authorText =
+        $el.find('.authorLabel').text().trim() ||
+        $el.find('.bc-size-small .bc-text-bold').first().text().trim();
+
+      const authorHref = $el.find('a[href*="/author/"]').first().attr('href') || '';
+      const authorAsinMatch = authorHref.match(/\/author\/[^\/]+\/([A-Z0-9]{10})/);
+
+      // Narrator — capture all narrator links (multi-narrator productions are common);
+      // fall back to .narratorLabel text, then to the bc-text-bold sibling for layouts
+      // that omit both anchor links and the .narratorLabel span.
+      const narratorText =
+        extractAllNarrators($, $el) ||
+        $el.find('.bc-size-small .bc-text-bold').eq(1).text().trim();
+
+      const coverArtUrl = $el.find('img').attr('src') || '';
+
+      const ratingText = $el.find('.ratingsLabel').text().trim();
+      const rating = ratingText ? parseFloat(ratingText.split(' ')[0]) : undefined;
+
+      audiobooks.push({
+        asin,
+        title,
+        author: stripPrefixes(authorText, langConfig.scraping.authorPrefixes),
+        authorAsin: authorAsinMatch?.[1] || undefined,
+        narrator: stripPrefixes(narratorText, langConfig.scraping.narratorPrefixes),
+        coverArtUrl: coverArtUrl.replace(/\._.*_\./, '._SL500_.'),
+        rating,
+      });
+
+      foundOnPage++;
+    });
+
+    return foundOnPage;
+  }
+
+  /**
+   * Parse the `.s-result-item` / `.productListItem` blocks used by
+   * /search?node=<categoryId>. Pushes matched books into `audiobooks`
+   * (skipping duplicates and respecting `limit`) and returns the count parsed
+   * from this page.
+   */
+  private parseSearchResultItems(
+    html: string,
+    audiobooks: AudibleAudiobook[],
+    limit: number,
+  ): number {
+    const $ = cheerio.load(html);
+    const langConfig = this.getLangConfig();
+    let foundOnPage = 0;
+
+    $('.s-result-item, .productListItem').each((_index, element) => {
+      if (audiobooks.length >= limit) return false;
+
+      const $el = $(element);
+
+      const asin =
+        $el.find('li').attr('data-asin') ||
+        $el.find('a').attr('href')?.match(/\/(?:pd|ac)\/[^\/]+\/([A-Z0-9]{10})/)?.[1] ||
+        '';
+      if (!asin) return;
+      if (audiobooks.some((b) => b.asin === asin)) return;
+
+      const title =
+        $el.find('h2').first().text().trim() ||
+        $el.find('h3 a').text().trim() ||
+        $el.find('.bc-heading a').text().trim();
+
+      const authorLink = $el.find('a[href*="/author/"]').first();
+      const authorText =
+        authorLink.text().trim() ||
+        $el.find('.authorLabel').text().trim();
+      const authorHref = authorLink.attr('href') || '';
+      const authorAsinMatch = authorHref.match(/\/author\/[^\/]+\/([A-Z0-9]{10})/);
+
+      // Narrator — capture all narrator links (multi-narrator productions are common)
+      const narratorText = extractAllNarrators($, $el);
+
+      const coverArtUrl = $el.find('img').attr('src') || '';
+
+      const runtimeText =
+        $el.find('.runtimeLabel').text().trim() ||
+        $el.find(buildContainsSelector('span', langConfig.scraping.lengthLabels)).text().trim();
+      const durationMinutes = this.parseRuntime(runtimeText);
+
+      const ratingText =
+        $el.find('.ratingsLabel').text().trim() ||
+        $el.find('.a-icon-star span').first().text().trim();
+      const rating = ratingText ? parseFloat(ratingText.split(' ')[0]) : undefined;
+
+      audiobooks.push({
+        asin,
+        title,
+        author: stripPrefixes(authorText, langConfig.scraping.authorPrefixes),
+        authorAsin: authorAsinMatch?.[1] || undefined,
+        narrator: stripPrefixes(narratorText, langConfig.scraping.narratorPrefixes),
+        coverArtUrl: coverArtUrl.replace(/\._.*_\./, '._SL500_.'),
+        durationMinutes,
+        rating,
+      });
+
+      foundOnPage++;
+    });
+
+    return foundOnPage;
   }
 
   private async delay(ms: number): Promise<void> {

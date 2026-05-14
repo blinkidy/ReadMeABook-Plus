@@ -82,6 +82,122 @@ function apiResponse(envelope: object) {
 }
 
 // ---------------------------------------------------------------------------
+// HTML fixture helpers (for getPopularAudiobooks / getNewReleases / getCategoryBooks,
+// which scrape Audible's curated HTML pages)
+// ---------------------------------------------------------------------------
+
+interface HtmlBookOverrides {
+  asin?: string;
+  title?: string;
+  author?: string;
+  authorAsin?: string;
+  /** Single-narrator shorthand; mutually exclusive with `narrators`. */
+  narrator?: string;
+  /** Multi-narrator productions render each name as its own searchNarrator anchor. */
+  narrators?: string[];
+  coverArtUrl?: string;
+  rating?: number;
+}
+
+/** Render one or more narrator anchor links suitable for embedding in .narratorLabel. */
+function renderNarratorLinks(names: string[]): string {
+  return names
+    .map(
+      (name) =>
+        `<a href="/search?searchNarrator=${encodeURIComponent(name)}">${name}</a>`,
+    )
+    .join(', ');
+}
+
+/**
+ * Produces a single .productListItem block matching the selectors parsed by
+ * parseProductListItems(). The parser looks for an `<li data-asin>` descendant,
+ * with an `<a href="/pd/...">` fallback — using a real `<li>` here both
+ * exercises the primary path and keeps the markup well-formed.
+ */
+function makeProductListItemHtml(overrides: HtmlBookOverrides = {}): string {
+  const {
+    asin = 'B000000001',
+    title = 'Test Book',
+    author = 'Test Author',
+    authorAsin = 'A000000001',
+    narrator = 'Test Narrator',
+    narrators,
+    coverArtUrl = 'https://images.example.com/cover._SL500_.jpg',
+    rating = 4.5,
+  } = overrides;
+
+  // Real Audible storefront markup embeds each narrator as its own anchor inside
+  // .narratorLabel for multi-narrator productions. The single-narrator case keeps
+  // the original plain-text span for backward compatibility with existing tests.
+  const narratorMarkup = narrators && narrators.length > 0
+    ? `<span class="narratorLabel">Narrated by: ${renderNarratorLinks(narrators)}</span>`
+    : `<span class="narratorLabel">${narrator}</span>`;
+
+  return `
+    <div class="productListItem">
+      <ul>
+        <li data-asin="${asin}">
+          <img src="${coverArtUrl}" />
+          <h3><a href="/pd/test/${asin}">${title}</a></h3>
+          <a class="authorLabel" href="/author/test/${authorAsin}">${author}</a>
+          ${narratorMarkup}
+          <span class="ratingsLabel">${rating} out of 5</span>
+        </li>
+      </ul>
+    </div>
+  `;
+}
+
+/**
+ * Produces a single .s-result-item block matching the selectors parsed by
+ * parseSearchResultItems(). Used for /search?node=<categoryId> category pages.
+ */
+function makeSearchResultItemHtml(overrides: HtmlBookOverrides = {}): string {
+  const {
+    asin = 'B000000001',
+    title = 'Test Book',
+    author = 'Test Author',
+    authorAsin = 'A000000001',
+    narrator = 'Test Narrator',
+    narrators,
+    coverArtUrl = 'https://images.example.com/cover._SL500_.jpg',
+    rating = 4.5,
+  } = overrides;
+
+  const narratorLinks = narrators && narrators.length > 0
+    ? renderNarratorLinks(narrators)
+    : `<a href="/search?searchNarrator=${encodeURIComponent(narrator)}">${narrator}</a>`;
+
+  return `
+    <div class="s-result-item">
+      <ul>
+        <li data-asin="${asin}">
+          <img src="${coverArtUrl}" />
+          <h2><a href="/pd/test/${asin}">${title}</a></h2>
+          <a href="/author/test/${authorAsin}">${author}</a>
+          ${narratorLinks}
+          <span class="ratingsLabel">${rating} out of 5</span>
+        </li>
+      </ul>
+    </div>
+  `;
+}
+
+/** Wrap one or more item-HTML strings in a minimal page document. */
+function makeHtmlPage(items: string[]): string {
+  return `<html><body>${items.join('')}</body></html>`;
+}
+
+/**
+ * Produces the value that client.get() should resolve to for HTML responses.
+ * cheerio.load() is called on response.data, so .data must be the raw HTML string.
+ */
+function htmlResponse(html: string) {
+  return { data: html };
+}
+
+// ---------------------------------------------------------------------------
 // Test setup
 // ---------------------------------------------------------------------------
 
@@ -683,61 +799,66 @@ describe('AudibleService', () => {
   });
 
   // -------------------------------------------------------------------------
-  // getPopularAudiobooks()
+  // getPopularAudiobooks() — HTML scraping of /adblbestsellers
   // -------------------------------------------------------------------------
 
   describe('getPopularAudiobooks()', () => {
-    it('uses products_sort_by: BestSellers', async () => {
-      apiClientMock.get.mockResolvedValue(apiResponse(makeProductsResponse([])));
+    it('hits /adblbestsellers on the htmlClient with pageSize=50', async () => {
+      htmlClientMock.get.mockResolvedValue(htmlResponse(makeHtmlPage([makeProductListItemHtml()])));
 
       const service = new AudibleService();
       await service.getPopularAudiobooks(1);
 
-      expect(apiClientMock.get.mock.calls[0][1].params.products_sort_by).toBe('BestSellers');
+      expect(htmlClientMock.get).toHaveBeenCalledWith(
+        '/adblbestsellers',
+        expect.objectContaining({
+          params: expect.objectContaining({ pageSize: 50 }),
+        }),
+      );
     });
 
-    it('subtracts 1 from public page=1 before calling the API', async () => {
-      apiClientMock.get.mockResolvedValue(apiResponse(makeProductsResponse([])));
+    it('does not include a page param on the first request (only from page 2 onward)', async () => {
+      htmlClientMock.get.mockResolvedValue(htmlResponse(makeHtmlPage([makeProductListItemHtml()])));
       const service = new AudibleService();
       const delaySpy = vi.spyOn(service as any, 'delay').mockResolvedValue(undefined);
 
       await service.getPopularAudiobooks(1);
-      expect(apiClientMock.get.mock.calls[0][1].params.page).toBe(0);
+      expect(htmlClientMock.get.mock.calls[0][1].params.page).toBeUndefined();
       delaySpy.mockRestore();
     });
 
-    it('makes a second call with page=1 when paginating to page 2', async () => {
-      const page1Products = Array.from({ length: 50 }, (_, i) =>
-        makeProduct({ asin: `B${String(i).padStart(9, '0')}`, title: `Book ${i}` }),
+    it('includes page=2 on the second request when paginating', async () => {
+      const page1Items = Array.from({ length: 50 }, (_, i) =>
+        makeProductListItemHtml({ asin: `B${String(i).padStart(9, '0')}`, title: `Book ${i}` }),
       );
-      const page2Products = Array.from({ length: 25 }, (_, i) =>
-        makeProduct({ asin: `B${String(i + 50).padStart(9, '0')}`, title: `Book ${i + 50}` }),
+      const page2Items = Array.from({ length: 25 }, (_, i) =>
+        makeProductListItemHtml({ asin: `B${String(i + 50).padStart(9, '0')}`, title: `Book ${i + 50}` }),
       );
 
-      apiClientMock.get
-        .mockResolvedValueOnce(apiResponse(makeProductsResponse(page1Products, 75)))
-        .mockResolvedValueOnce(apiResponse(makeProductsResponse(page2Products, 75)));
+      htmlClientMock.get
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page1Items)))
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page2Items)));
 
       const service = new AudibleService();
       const delaySpy = vi.spyOn(service as any, 'delay').mockResolvedValue(undefined);
 
       await service.getPopularAudiobooks(75);
 
-      expect(apiClientMock.get.mock.calls[1][1].params.page).toBe(1);
+      expect(htmlClientMock.get.mock.calls[1][1].params.page).toBe(2);
       delaySpy.mockRestore();
     });
 
-    it('paginates and returns up to the requested limit', async () => {
-      const page1Products = Array.from({ length: 50 }, (_, i) =>
-        makeProduct({ asin: `B${String(i).padStart(9, '0')}`, title: `Book ${i}` }),
+    it('paginates across pages and returns up to the requested limit', async () => {
+      const page1Items = Array.from({ length: 50 }, (_, i) =>
+        makeProductListItemHtml({ asin: `B${String(i).padStart(9, '0')}`, title: `Book ${i}` }),
       );
-      const page2Products = Array.from({ length: 25 }, (_, i) =>
-        makeProduct({ asin: `B${String(i + 50).padStart(9, '0')}`, title: `Book ${i + 50}` }),
+      const page2Items = Array.from({ length: 25 }, (_, i) =>
+        makeProductListItemHtml({ asin: `B${String(i + 50).padStart(9, '0')}`, title: `Book ${i + 50}` }),
       );
 
-      apiClientMock.get
-        .mockResolvedValueOnce(apiResponse(makeProductsResponse(page1Products, 75)))
-        .mockResolvedValueOnce(apiResponse(makeProductsResponse(page2Products, 75)));
+      htmlClientMock.get
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page1Items)))
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page2Items)));
 
       const service = new AudibleService();
       const delaySpy = vi.spyOn(service as any, 'delay').mockResolvedValue(undefined);
@@ -747,175 +868,337 @@ describe('AudibleService', () => {
       delaySpy.mockRestore();
     });
 
-    it('stops early when a page returns fewer than the page size', async () => {
-      const products = [makeProduct()];
-      apiClientMock.get.mockResolvedValueOnce(apiResponse(makeProductsResponse(products, 1)));
+    it('stops early when a page returns fewer than half the page size', async () => {
+      htmlClientMock.get.mockResolvedValueOnce(
+        htmlResponse(makeHtmlPage([makeProductListItemHtml()])),
+      );
 
       const service = new AudibleService();
       const results = await service.getPopularAudiobooks(50);
 
       expect(results).toHaveLength(1);
-      expect(apiClientMock.get).toHaveBeenCalledTimes(1);
+      expect(htmlClientMock.get).toHaveBeenCalledTimes(1);
     });
 
     it('deduplicates by ASIN across pages', async () => {
-      const sharedProduct = makeProduct({ asin: 'BDUP000001', title: 'Duplicated Book' });
-      const uniqueProduct = makeProduct({ asin: 'BUNIQ000001', title: 'Unique Book' });
+      const sharedAsin = 'BDUP000001';
+      const uniqueAsin = 'BUNIQ000001';
 
-      apiClientMock.get
-        .mockResolvedValueOnce(
-          apiResponse(makeProductsResponse([sharedProduct], 51)),
-        )
-        .mockResolvedValueOnce(
-          // page 2 returns the same ASIN plus a new one
-          apiResponse(makeProductsResponse([sharedProduct, uniqueProduct], 51)),
-        );
+      // Build a "full" first page (50 items, all with the shared ASIN duplicated as filler)
+      // so the parser proceeds to page 2.
+      const page1Items = [
+        makeProductListItemHtml({ asin: sharedAsin, title: 'Duplicated Book' }),
+        ...Array.from({ length: 49 }, (_, i) =>
+          makeProductListItemHtml({ asin: `BFILL${String(i).padStart(5, '0')}`, title: `Filler ${i}` }),
+        ),
+      ];
+      const page2Items = [
+        makeProductListItemHtml({ asin: sharedAsin, title: 'Duplicated Book' }),
+        makeProductListItemHtml({ asin: uniqueAsin, title: 'Unique Book' }),
+        ...Array.from({ length: 48 }, (_, i) =>
+          makeProductListItemHtml({ asin: `BFILL2${String(i).padStart(4, '0')}`, title: `Filler2 ${i}` }),
+        ),
+      ];
+
+      htmlClientMock.get
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page1Items)))
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page2Items)));
 
       const service = new AudibleService();
       const delaySpy = vi.spyOn(service as any, 'delay').mockResolvedValue(undefined);
-      const results = await service.getPopularAudiobooks(100);
+      const results = await service.getPopularAudiobooks(150);
 
       const asins = results.map((r) => r.asin);
-      expect(asins.filter((a) => a === 'BDUP000001')).toHaveLength(1);
+      expect(asins.filter((a) => a === sharedAsin)).toHaveLength(1);
+      expect(asins).toContain(uniqueAsin);
       delaySpy.mockRestore();
     });
 
     it('returns empty array on error without throwing', async () => {
       const error: Error & { response?: { status: number } } = new Error('Not Found');
       error.response = { status: 404 };
-      apiClientMock.get.mockRejectedValue(error);
+      htmlClientMock.get.mockRejectedValue(error);
 
       const service = new AudibleService();
       const results = await service.getPopularAudiobooks(5);
 
       expect(results).toEqual([]);
     });
+
+    it('uses htmlClient (not apiClient) for the request', async () => {
+      htmlClientMock.get.mockResolvedValue(htmlResponse(makeHtmlPage([makeProductListItemHtml()])));
+
+      const service = new AudibleService();
+      await service.getPopularAudiobooks(1);
+
+      expect(htmlClientMock.get).toHaveBeenCalled();
+      expect(apiClientMock.get).not.toHaveBeenCalled();
+    });
+
+    it('maps title, author, narrator, and rating from the parsed item', async () => {
+      htmlClientMock.get.mockResolvedValue(
+        htmlResponse(
+          makeHtmlPage([
+            makeProductListItemHtml({
+              asin: 'B0HTMLMAP1',
+              title: 'Mapped Title',
+              author: 'Mapped Author',
+              authorAsin: 'A00MAPAUTH',
+              narrator: 'Mapped Narrator',
+              rating: 4.7,
+            }),
+          ]),
+        ),
+      );
+
+      const service = new AudibleService();
+      const [book] = await service.getPopularAudiobooks(1);
+
+      expect(book.asin).toBe('B0HTMLMAP1');
+      expect(book.title).toBe('Mapped Title');
+      expect(book.author).toBe('Mapped Author');
+      expect(book.authorAsin).toBe('A00MAPAUTH');
+      expect(book.narrator).toBe('Mapped Narrator');
+      expect(book.rating).toBeCloseTo(4.7);
+    });
+
+    it('captures every co-narrator on multi-narrator productions (regression: prior code took only the first link)', async () => {
+      htmlClientMock.get.mockResolvedValue(
+        htmlResponse(
+          makeHtmlPage([
+            makeProductListItemHtml({
+              asin: 'B0FULLCAST',
+              narrators: [
+                'Kristin Atherton',
+                'Roy McMillan',
+                'Clare Corbett',
+                'Tom Bateman',
+                'Patience Tomlinson',
+                'Shaheen Khan',
+              ],
+            }),
+          ]),
+        ),
+      );
+
+      const service = new AudibleService();
+      const [book] = await service.getPopularAudiobooks(1);
+
+      // Every narrator must round-trip — order is not significant downstream,
+      // but document order should be preserved for stable cache values.
+      expect(book.narrator).toBe(
+        'Kristin Atherton, Roy McMillan, Clare Corbett, Tom Bateman, Patience Tomlinson, Shaheen Khan',
+      );
+    });
   });
 
   // -------------------------------------------------------------------------
-  // getNewReleases()
+  // getNewReleases() — HTML scraping of /newreleases
   // -------------------------------------------------------------------------
 
   describe('getNewReleases()', () => {
-    it('uses products_sort_by: -ReleaseDate', async () => {
-      apiClientMock.get.mockResolvedValue(apiResponse(makeProductsResponse([])));
+    it('hits /newreleases on the htmlClient with pageSize=50', async () => {
+      htmlClientMock.get.mockResolvedValue(htmlResponse(makeHtmlPage([makeProductListItemHtml()])));
 
       const service = new AudibleService();
       await service.getNewReleases(1);
 
-      expect(apiClientMock.get.mock.calls[0][1].params.products_sort_by).toBe('-ReleaseDate');
+      expect(htmlClientMock.get).toHaveBeenCalledWith(
+        '/newreleases',
+        expect.objectContaining({
+          params: expect.objectContaining({ pageSize: 50 }),
+        }),
+      );
     });
 
-    it('subtracts 1 from public page=1 before calling the API', async () => {
-      apiClientMock.get.mockResolvedValue(apiResponse(makeProductsResponse([])));
+    it('does not include a page param on the first request', async () => {
+      htmlClientMock.get.mockResolvedValue(htmlResponse(makeHtmlPage([makeProductListItemHtml()])));
       const service = new AudibleService();
       const delaySpy = vi.spyOn(service as any, 'delay').mockResolvedValue(undefined);
 
       await service.getNewReleases(1);
-      expect(apiClientMock.get.mock.calls[0][1].params.page).toBe(0);
+      expect(htmlClientMock.get.mock.calls[0][1].params.page).toBeUndefined();
       delaySpy.mockRestore();
     });
 
-    it('subtracts 1 from public page=2 when paginating to the second page', async () => {
-      const page1Products = Array.from({ length: 50 }, (_, i) =>
-        makeProduct({ asin: `B${String(i).padStart(9, '0')}` }),
+    it('includes page=2 on the second request when paginating', async () => {
+      const page1Items = Array.from({ length: 50 }, (_, i) =>
+        makeProductListItemHtml({ asin: `B${String(i).padStart(9, '0')}` }),
       );
-      const page2Products = [makeProduct({ asin: 'BNEW000099' })];
+      const page2Items = Array.from({ length: 50 }, (_, i) =>
+        makeProductListItemHtml({ asin: `B${String(i + 50).padStart(9, '0')}` }),
+      );
 
-      apiClientMock.get
-        .mockResolvedValueOnce(apiResponse(makeProductsResponse(page1Products, 51)))
-        .mockResolvedValueOnce(apiResponse(makeProductsResponse(page2Products, 51)));
+      htmlClientMock.get
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page1Items)))
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page2Items)));
 
       const service = new AudibleService();
       const delaySpy = vi.spyOn(service as any, 'delay').mockResolvedValue(undefined);
 
-      await service.getNewReleases(51);
-      expect(apiClientMock.get.mock.calls[1][1].params.page).toBe(1);
+      await service.getNewReleases(100);
+      expect(htmlClientMock.get.mock.calls[1][1].params.page).toBe(2);
       delaySpy.mockRestore();
     });
 
     it('deduplicates by ASIN across pages', async () => {
-      const sharedProduct = makeProduct({ asin: 'BDUP000002' });
-      apiClientMock.get
-        .mockResolvedValueOnce(apiResponse(makeProductsResponse([sharedProduct], 51)))
-        .mockResolvedValueOnce(apiResponse(makeProductsResponse([sharedProduct], 51)));
+      const sharedAsin = 'BDUP000002';
+
+      const page1Items = [
+        makeProductListItemHtml({ asin: sharedAsin }),
+        ...Array.from({ length: 49 }, (_, i) =>
+          makeProductListItemHtml({ asin: `BNEW${String(i).padStart(6, '0')}` }),
+        ),
+      ];
+      const page2Items = [
+        makeProductListItemHtml({ asin: sharedAsin }),
+        ...Array.from({ length: 49 }, (_, i) =>
+          makeProductListItemHtml({ asin: `BNEW2${String(i).padStart(5, '0')}` }),
+        ),
+      ];
+
+      htmlClientMock.get
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page1Items)))
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page2Items)));
 
       const service = new AudibleService();
       const delaySpy = vi.spyOn(service as any, 'delay').mockResolvedValue(undefined);
-      const results = await service.getNewReleases(100);
+      const results = await service.getNewReleases(150);
 
-      expect(results.filter((r) => r.asin === 'BDUP000002')).toHaveLength(1);
+      expect(results.filter((r) => r.asin === sharedAsin)).toHaveLength(1);
       delaySpy.mockRestore();
     });
 
     it('returns empty array on error without throwing', async () => {
       const error: Error & { response?: { status: number } } = new Error('Not Found');
       error.response = { status: 404 };
-      apiClientMock.get.mockRejectedValue(error);
+      htmlClientMock.get.mockRejectedValue(error);
 
       const service = new AudibleService();
       const results = await service.getNewReleases(5);
 
       expect(results).toEqual([]);
     });
+
+    it('uses htmlClient (not apiClient) for the request', async () => {
+      htmlClientMock.get.mockResolvedValue(htmlResponse(makeHtmlPage([makeProductListItemHtml()])));
+
+      const service = new AudibleService();
+      await service.getNewReleases(1);
+
+      expect(htmlClientMock.get).toHaveBeenCalled();
+      expect(apiClientMock.get).not.toHaveBeenCalled();
+    });
   });
 
   // -------------------------------------------------------------------------
-  // getCategoryBooks()
+  // getCategoryBooks() — HTML scraping of /search?node=<categoryId>
   // -------------------------------------------------------------------------
 
   describe('getCategoryBooks()', () => {
-    it('sends category_id and BestSellers sort param', async () => {
-      apiClientMock.get.mockResolvedValue(apiResponse(makeProductsResponse([])));
+    it('hits /search on the htmlClient with node, pageSize, and popularity-rank sort', async () => {
+      htmlClientMock.get.mockResolvedValue(
+        htmlResponse(makeHtmlPage([makeSearchResultItemHtml()])),
+      );
 
       const service = new AudibleService();
       await service.getCategoryBooks('18685580011', 1);
 
-      const params = apiClientMock.get.mock.calls[0][1].params;
-      expect(params.category_id).toBe('18685580011');
-      expect(params.products_sort_by).toBe('BestSellers');
+      const params = htmlClientMock.get.mock.calls[0][1].params;
+      expect(htmlClientMock.get.mock.calls[0][0]).toBe('/search');
+      expect(params.node).toBe('18685580011');
+      expect(params.pageSize).toBe(50);
+      expect(params.sort).toBe('popularity-rank');
     });
 
-    it('subtracts 1 from public page=1 before calling the API', async () => {
-      apiClientMock.get.mockResolvedValue(apiResponse(makeProductsResponse([])));
+    it('does not include a page param on the first request', async () => {
+      htmlClientMock.get.mockResolvedValue(
+        htmlResponse(makeHtmlPage([makeSearchResultItemHtml()])),
+      );
       const service = new AudibleService();
       const delaySpy = vi.spyOn(service as any, 'delay').mockResolvedValue(undefined);
 
       await service.getCategoryBooks('CAT001', 1);
-      expect(apiClientMock.get.mock.calls[0][1].params.page).toBe(0);
+      expect(htmlClientMock.get.mock.calls[0][1].params.page).toBeUndefined();
       delaySpy.mockRestore();
     });
 
-    it('subtracts 1 from public page=2 when paginating to the second page', async () => {
-      const page1Products = Array.from({ length: 50 }, (_, i) =>
-        makeProduct({ asin: `B${String(i).padStart(9, '0')}` }),
+    it('includes page=2 on the second request when paginating', async () => {
+      const page1Items = Array.from({ length: 50 }, (_, i) =>
+        makeSearchResultItemHtml({ asin: `B${String(i).padStart(9, '0')}` }),
       );
-      const page2Products = [makeProduct({ asin: 'BCAT000099' })];
+      const page2Items = Array.from({ length: 50 }, (_, i) =>
+        makeSearchResultItemHtml({ asin: `B${String(i + 50).padStart(9, '0')}` }),
+      );
 
-      apiClientMock.get
-        .mockResolvedValueOnce(apiResponse(makeProductsResponse(page1Products, 51)))
-        .mockResolvedValueOnce(apiResponse(makeProductsResponse(page2Products, 51)));
+      htmlClientMock.get
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page1Items)))
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page2Items)));
 
       const service = new AudibleService();
       const delaySpy = vi.spyOn(service as any, 'delay').mockResolvedValue(undefined);
 
-      await service.getCategoryBooks('CAT001', 51);
-      expect(apiClientMock.get.mock.calls[1][1].params.page).toBe(1);
+      await service.getCategoryBooks('CAT001', 100);
+      expect(htmlClientMock.get.mock.calls[1][1].params.page).toBe(2);
       delaySpy.mockRestore();
     });
 
     it('deduplicates by ASIN across pages', async () => {
-      const sharedProduct = makeProduct({ asin: 'BDUP000003' });
-      apiClientMock.get
-        .mockResolvedValueOnce(apiResponse(makeProductsResponse([sharedProduct], 51)))
-        .mockResolvedValueOnce(apiResponse(makeProductsResponse([sharedProduct], 51)));
+      const sharedAsin = 'BDUP000003';
+
+      const page1Items = [
+        makeSearchResultItemHtml({ asin: sharedAsin }),
+        ...Array.from({ length: 49 }, (_, i) =>
+          makeSearchResultItemHtml({ asin: `BCAT${String(i).padStart(6, '0')}` }),
+        ),
+      ];
+      const page2Items = [
+        makeSearchResultItemHtml({ asin: sharedAsin }),
+        ...Array.from({ length: 49 }, (_, i) =>
+          makeSearchResultItemHtml({ asin: `BCAT2${String(i).padStart(5, '0')}` }),
+        ),
+      ];
+
+      htmlClientMock.get
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page1Items)))
+        .mockResolvedValueOnce(htmlResponse(makeHtmlPage(page2Items)));
 
       const service = new AudibleService();
       const delaySpy = vi.spyOn(service as any, 'delay').mockResolvedValue(undefined);
-      const results = await service.getCategoryBooks('CAT001', 100);
+      const results = await service.getCategoryBooks('CAT001', 150);
 
-      expect(results.filter((r) => r.asin === 'BDUP000003')).toHaveLength(1);
+      expect(results.filter((r) => r.asin === sharedAsin)).toHaveLength(1);
       delaySpy.mockRestore();
+    });
+
+    it('uses htmlClient (not apiClient) for the request', async () => {
+      htmlClientMock.get.mockResolvedValue(
+        htmlResponse(makeHtmlPage([makeSearchResultItemHtml()])),
+      );
+
+      const service = new AudibleService();
+      await service.getCategoryBooks('CAT001', 1);
+
+      expect(htmlClientMock.get).toHaveBeenCalled();
+      expect(apiClientMock.get).not.toHaveBeenCalled();
+    });
+
+    it('captures every co-narrator on multi-narrator productions (regression: prior code took only the first link)', async () => {
+      htmlClientMock.get.mockResolvedValue(
+        htmlResponse(
+          makeHtmlPage([
+            makeSearchResultItemHtml({
+              asin: 'B0FULLCAST',
+              narrators: ['Alice', 'Bob', 'Carol', 'Dan'],
+            }),
+          ]),
+        ),
+      );
+
+      const service = new AudibleService();
+      const [book] = await service.getCategoryBooks('CAT001', 1);
+
+      expect(book.narrator).toBe('Alice, Bob, Carol, Dan');
     });
   });
 

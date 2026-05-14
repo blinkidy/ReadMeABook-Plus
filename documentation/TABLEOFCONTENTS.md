@@ -45,6 +45,8 @@
 - **Web scraping (popular, new releases)** → [integrations/audible.md](integrations/audible.md)
 - **Database caching, real-time matching** → [integrations/audible.md](integrations/audible.md)
 - **Book covers API for login page** → [frontend/pages/login.md](frontend/pages/login.md)
+- **Dedup & works table (cross-ASIN identity)** → [integrations/audible.md](integrations/audible.md#dedup--works-table)
+- **Multi-narrator capture in HTML scrapers** → [integrations/audible.md](integrations/audible.md#narrator-capture-in-html-scrapers)
 
 ## E-book Support (First-Class)
 - **First-class ebook requests, separate tracking** → [integrations/ebook-sidecar.md](integrations/ebook-sidecar.md)

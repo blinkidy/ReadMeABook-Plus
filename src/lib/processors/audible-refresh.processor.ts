@@ -138,16 +138,37 @@ async function persistSectionBooks(
   logger: ReturnType<typeof RMABLogger.forJob>,
   labelForErrors: string,
 ): Promise<number> {
+  // Defensive dedup: the (asin, categoryId) unique constraint means a duplicate ASIN
+  // in `books` crashes the second .create() with P2002. The HTML parser already dedupes
+  // per page and across pages against the cumulative accumulator, but a warn-on-fire
+  // signal here lets us detect upstream surprises (e.g. Audible serving the same item
+  // in both a carousel and the main grid) without the noisy duplicate-key Postgres
+  // errors. Keep the first occurrence so Audible's editorial ordering is preserved.
+  const seenAsins = new Set<string>();
+  const dedupedBooks = books.filter((b) => {
+    if (!b?.asin || seenAsins.has(b.asin)) return false;
+    seenAsins.add(b.asin);
+    return true;
+  });
+  const droppedCount = books.length - dedupedBooks.length;
+  if (droppedCount > 0) {
+    logger.warn(
+      `Dropped ${droppedCount} duplicate ASIN(s) from ${categoryId} input list before persist`,
+    );
+  }
+
   // Wipe previous entries for this section
   logger.info(`Clearing previous data for ${categoryId}...`);
   await prisma.audibleCacheCategory.deleteMany({
     where: { categoryId },
   });
-  logger.info(`Cleared previous entries for ${categoryId}, saving ${books.length} books...`);
+  logger.info(
+    `Cleared previous entries for ${categoryId}, saving ${dedupedBooks.length} books...`,
+  );
 
   let saved = 0;
-  for (let i = 0; i < books.length; i++) {
-    const book = books[i];
+  for (let i = 0; i < dedupedBooks.length; i++) {
+    const book = dedupedBooks[i];
     try {
       // Cache thumbnail if coverArtUrl exists
       let cachedCoverPath: string | null = null;

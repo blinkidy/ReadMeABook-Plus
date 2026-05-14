@@ -6,6 +6,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPrismaMock } from '../helpers/prisma';
 import type { DedupGroup } from '@/lib/utils/deduplicate-audiobooks';
+import type { AudibleAudiobook } from '@/lib/integrations/audible.service';
+
+function makeBook(overrides: Partial<AudibleAudiobook> & { asin: string }): AudibleAudiobook {
+  return {
+    title: 'Test Book',
+    author: 'Test Author',
+    ...overrides,
+  };
+}
 
 const prismaMock = createPrismaMock();
 
@@ -302,5 +311,185 @@ describe('getSiblingAsins', () => {
 
     // No siblings means it shouldn't be in the map at all
     expect(result.has('ASIN_LONELY')).toBe(false);
+  });
+});
+
+describe('collapseByExistingWorks', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it('returns input unchanged when the list is empty or has one entry', async () => {
+    const { collapseByExistingWorks } = await import('@/lib/services/works.service');
+
+    expect(await collapseByExistingWorks([])).toEqual([]);
+    expect(prismaMock.workAsin.findMany).not.toHaveBeenCalled();
+
+    const single = [makeBook({ asin: 'A1' })];
+    expect(await collapseByExistingWorks(single)).toEqual(single);
+    expect(prismaMock.workAsin.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns input unchanged when none of the ASINs are in any work', async () => {
+    prismaMock.workAsin.findMany.mockResolvedValue([]);
+
+    const { collapseByExistingWorks } = await import('@/lib/services/works.service');
+
+    const books = [
+      makeBook({ asin: 'A1', title: 'Alpha' }),
+      makeBook({ asin: 'A2', title: 'Beta' }),
+    ];
+
+    const result = await collapseByExistingWorks(books);
+    expect(result).toEqual(books);
+  });
+
+  it('collapses two ASINs that share a work to a single representative', async () => {
+    prismaMock.workAsin.findMany.mockResolvedValue([
+      { asin: 'A1', workId: 'work-1' },
+      { asin: 'A2', workId: 'work-1' },
+    ]);
+
+    const { collapseByExistingWorks } = await import('@/lib/services/works.service');
+
+    const books = [
+      makeBook({ asin: 'A1', title: 'The Passengers', coverArtUrl: 'cover.jpg' }),
+      makeBook({ asin: 'A2', title: 'The Passengers' }),
+    ];
+
+    const result = await collapseByExistingWorks(books);
+    expect(result).toHaveLength(1);
+    // A1 wins — it has the cover URL (higher metadata score)
+    expect(result[0].asin).toBe('A1');
+  });
+
+  it('keeps the richest-metadata entry when collapsing, regardless of input order', async () => {
+    prismaMock.workAsin.findMany.mockResolvedValue([
+      { asin: 'A1', workId: 'work-1' },
+      { asin: 'A2', workId: 'work-1' },
+    ]);
+
+    const { collapseByExistingWorks } = await import('@/lib/services/works.service');
+
+    // A1 first (sparse), A2 second (rich) — A2 should win on score
+    const books = [
+      makeBook({ asin: 'A1', title: 'Book' }),
+      makeBook({
+        asin: 'A2',
+        title: 'Book',
+        coverArtUrl: 'cover.jpg',
+        rating: 4.5,
+        durationMinutes: 600,
+        narrator: 'Full Cast',
+        description: 'Rich book',
+        releaseDate: '2024-01-01',
+        genres: ['Fiction'],
+      }),
+    ];
+
+    const result = await collapseByExistingWorks(books);
+    expect(result).toHaveLength(1);
+    expect(result[0].asin).toBe('A2');
+  });
+
+  it('preserves position of the work in the input order', async () => {
+    prismaMock.workAsin.findMany.mockResolvedValue([
+      { asin: 'A2', workId: 'work-1' },
+      { asin: 'A4', workId: 'work-1' },
+    ]);
+
+    const { collapseByExistingWorks } = await import('@/lib/services/works.service');
+
+    const books = [
+      makeBook({ asin: 'A1', title: 'Alpha' }),
+      makeBook({ asin: 'A2', title: 'Beta' }),
+      makeBook({ asin: 'A3', title: 'Gamma' }),
+      makeBook({ asin: 'A4', title: 'Beta' }),
+      makeBook({ asin: 'A5', title: 'Delta' }),
+    ];
+
+    const result = await collapseByExistingWorks(books);
+    // A2 and A4 collapse to one entry at position 1 (the first occurrence)
+    expect(result.map(b => b.asin)).toEqual(['A1', 'A2', 'A3', 'A5']);
+  });
+
+  it('handles multiple independent works in the same batch', async () => {
+    prismaMock.workAsin.findMany.mockResolvedValue([
+      { asin: 'A1', workId: 'work-1' },
+      { asin: 'A2', workId: 'work-1' },
+      { asin: 'B1', workId: 'work-2' },
+      { asin: 'B2', workId: 'work-2' },
+      { asin: 'B3', workId: 'work-2' },
+    ]);
+
+    const { collapseByExistingWorks } = await import('@/lib/services/works.service');
+
+    const books = [
+      makeBook({ asin: 'A1' }),
+      makeBook({ asin: 'B1' }),
+      makeBook({ asin: 'A2' }),
+      makeBook({ asin: 'B2' }),
+      makeBook({ asin: 'B3' }),
+      makeBook({ asin: 'C1' }),
+    ];
+
+    const result = await collapseByExistingWorks(books);
+    expect(result.map(b => b.asin)).toEqual(['A1', 'B1', 'C1']);
+  });
+
+  it('passes through books that are not in any work alongside collapsed ones', async () => {
+    prismaMock.workAsin.findMany.mockResolvedValue([
+      { asin: 'A1', workId: 'work-1' },
+      { asin: 'A2', workId: 'work-1' },
+    ]);
+
+    const { collapseByExistingWorks } = await import('@/lib/services/works.service');
+
+    const books = [
+      makeBook({ asin: 'STANDALONE_1', title: 'Standalone 1' }),
+      makeBook({ asin: 'A1', title: 'Same Book' }),
+      makeBook({ asin: 'STANDALONE_2', title: 'Standalone 2' }),
+      makeBook({ asin: 'A2', title: 'Same Book' }),
+    ];
+
+    const result = await collapseByExistingWorks(books);
+    expect(result).toHaveLength(3);
+    expect(result.map(b => b.asin)).toEqual(['STANDALONE_1', 'A1', 'STANDALONE_2']);
+  });
+
+  it('returns input unchanged on DB failure (does not throw)', async () => {
+    prismaMock.workAsin.findMany.mockRejectedValue(new Error('DB exploded'));
+
+    const { collapseByExistingWorks } = await import('@/lib/services/works.service');
+
+    const books = [
+      makeBook({ asin: 'A1' }),
+      makeBook({ asin: 'A2' }),
+    ];
+
+    const result = await collapseByExistingWorks(books);
+    expect(result).toEqual(books);
+  });
+
+  it('only queries the workAsin table once per call', async () => {
+    prismaMock.workAsin.findMany.mockResolvedValue([
+      { asin: 'A1', workId: 'work-1' },
+      { asin: 'A2', workId: 'work-1' },
+    ]);
+
+    const { collapseByExistingWorks } = await import('@/lib/services/works.service');
+
+    await collapseByExistingWorks([
+      makeBook({ asin: 'A1' }),
+      makeBook({ asin: 'A2' }),
+      makeBook({ asin: 'A3' }),
+    ]);
+
+    expect(prismaMock.workAsin.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.workAsin.findMany).toHaveBeenCalledWith({
+      where: { asin: { in: ['A1', 'A2', 'A3'] } },
+      select: { asin: true, workId: true },
+    });
   });
 });
