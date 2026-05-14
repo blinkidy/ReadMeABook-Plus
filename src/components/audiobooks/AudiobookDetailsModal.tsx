@@ -552,7 +552,7 @@ export function AudiobookDetailsModal({
                   {audiobook.language && (
                     <div>
                       <p className="text-gray-500 dark:text-gray-400">Language</p>
-                      <p className="text-gray-900 dark:text-gray-100">{audiobook.language.charAt(0).toUpperCase() + audiobook.language.slice(1)}</p>
+                      <p className="text-gray-900 dark:text-gray-100 capitalize">{audiobook.language}</p>
                     </div>
                   )}
 
@@ -560,7 +560,7 @@ export function AudiobookDetailsModal({
                   {audiobook.formatType && (
                     <div>
                       <p className="text-gray-500 dark:text-gray-400">Format</p>
-                      <p className="text-gray-900 dark:text-gray-100">{audiobook.formatType.charAt(0).toUpperCase() + audiobook.formatType.slice(1)}</p>
+                      <p className="text-gray-900 dark:text-gray-100 capitalize">{audiobook.formatType}</p>
                     </div>
                   )}
 

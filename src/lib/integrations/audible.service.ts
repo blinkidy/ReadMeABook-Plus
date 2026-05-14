@@ -108,6 +108,8 @@ interface CatalogProduct {
   runtime_length_min?: number;
   release_date?: string;
   language?: string;
+  format_type?: string;
+  publisher_name?: string;
   rating?: {
     overall_distribution?: {
       display_stars?: number;
@@ -198,6 +200,9 @@ function mapCatalogProduct(product: CatalogProduct): AudibleAudiobook {
     series,
     seriesPart,
     seriesAsin,
+    language: product.language ?? undefined,
+    formatType: product.format_type ?? undefined,
+    publisherName: product.publisher_name ?? undefined,
   };
 }
 

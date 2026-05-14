@@ -250,6 +250,9 @@ interface AudibleAudiobook {
   series?: string;
   seriesPart?: string;
   seriesAsin?: string;
+  language?: string;
+  formatType?: string;
+  publisherName?: string;
 }
 
 interface EnrichedAudibleAudiobook extends AudibleAudiobook {

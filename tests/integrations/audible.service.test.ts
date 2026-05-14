@@ -49,6 +49,8 @@ interface ProductOverrides {
   runtime_length_min?: number;
   release_date?: string;
   language?: string;
+  format_type?: string;
+  publisher_name?: string;
   rating?: { overall_distribution?: { display_stars?: number } };
   category_ladders?: Array<{ ladder: Array<{ name: string }> }>;
   series?: Array<{ asin?: string; title?: string; sequence?: string }>;
@@ -614,6 +616,47 @@ describe('AudibleService', () => {
       // Duplicates removed
       const genreSet = new Set(results[0].genres);
       expect(genreSet.size).toBe(5);
+    });
+
+    it('maps language from catalog product', async () => {
+      const products = [makeProduct({ language: 'english' })];
+      apiClientMock.get.mockResolvedValue(apiResponse(makeProductsResponse(products)));
+
+      const service = new AudibleService();
+      const { results } = await service.search('test', 1);
+
+      expect(results[0].language).toBe('english');
+    });
+
+    it('maps format_type to formatType from catalog product', async () => {
+      const products = [makeProduct({ format_type: 'unabridged' })];
+      apiClientMock.get.mockResolvedValue(apiResponse(makeProductsResponse(products)));
+
+      const service = new AudibleService();
+      const { results } = await service.search('test', 1);
+
+      expect(results[0].formatType).toBe('unabridged');
+    });
+
+    it('maps publisher_name to publisherName from catalog product', async () => {
+      const products = [makeProduct({ publisher_name: 'Penguin Random House Audio' })];
+      apiClientMock.get.mockResolvedValue(apiResponse(makeProductsResponse(products)));
+
+      const service = new AudibleService();
+      const { results } = await service.search('test', 1);
+
+      expect(results[0].publisherName).toBe('Penguin Random House Audio');
+    });
+
+    it('leaves formatType and publisherName undefined when catalog product omits them', async () => {
+      const products = [makeProduct()];
+      apiClientMock.get.mockResolvedValue(apiResponse(makeProductsResponse(products)));
+
+      const service = new AudibleService();
+      const { results } = await service.search('test', 1);
+
+      expect(results[0].formatType).toBeUndefined();
+      expect(results[0].publisherName).toBeUndefined();
     });
   });
 
@@ -1262,6 +1305,9 @@ describe('AudibleService', () => {
           runtimeLengthMin: '300',
           genres: ['Fiction'],
           rating: '4.7',
+          language: 'english',
+          formatType: 'unabridged',
+          publisherName: 'Test Publisher',
         },
       });
 
@@ -1271,6 +1317,9 @@ describe('AudibleService', () => {
       expect(details?.title).toBe('Audnexus Book');
       expect(details?.author).toBe('Author A');
       expect(details?.durationMinutes).toBe(300);
+      expect(details?.language).toBe('english');
+      expect(details?.formatType).toBe('unabridged');
+      expect(details?.publisherName).toBe('Test Publisher');
       // Catalog API should NOT be called when Audnexus succeeds.
       expect(apiClientMock.get).not.toHaveBeenCalled();
     });
