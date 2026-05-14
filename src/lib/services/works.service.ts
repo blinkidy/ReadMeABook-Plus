@@ -9,7 +9,8 @@
 
 import { prisma } from '@/lib/db';
 import { RMABLogger } from '@/lib/utils/logger';
-import type { DedupGroup } from '@/lib/utils/deduplicate-audiobooks';
+import { metadataScore, type DedupGroup } from '@/lib/utils/deduplicate-audiobooks';
+import type { AudibleAudiobook } from '@/lib/integrations/audible.service';
 
 const logger = RMABLogger.create('WorksService');
 
@@ -179,6 +180,96 @@ export async function seedAsin(
       error: error instanceof Error ? error.message : String(error),
       asin,
     });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// View-level collapse (consult the works table after local dedup)
+// ---------------------------------------------------------------------------
+
+/**
+ * Collapse books that already share a Work record according to the works table.
+ *
+ * The local `deduplicateAndCollectGroups()` pass is title/narrator/duration-based
+ * and stateless — it can fail to merge ASINs whose source metadata diverges (e.g.
+ * a series-page scrape captures different "first narrators" for two ASINs of the
+ * same recording, or two paginated pages each contain one ASIN and never compare
+ * them). The works table is the durable source of truth for "same book" identity,
+ * populated by every prior dedup pass and by request-time seeding. This pass
+ * applies that knowledge to the current view.
+ *
+ * Behavior:
+ *  - Books whose ASINs map to a shared workId collapse to a single representative
+ *    chosen by `metadataScore()` (same ranking as local dedup).
+ *  - Books not present in any work, or in single-ASIN works, pass through untouched.
+ *  - Original ordering is preserved (the kept representative sits at the position
+ *    of the first occurrence of its work in the input list).
+ *  - DB failure is non-fatal: the input list is returned unchanged so the view
+ *    still renders (degrades to local-dedup-only behavior).
+ */
+export async function collapseByExistingWorks(
+  books: AudibleAudiobook[],
+): Promise<AudibleAudiobook[]> {
+  if (books.length <= 1) return books;
+
+  try {
+    const asins = books.map(b => b.asin);
+    const entries = await prisma.workAsin.findMany({
+      where: { asin: { in: asins } },
+      select: { asin: true, workId: true },
+    });
+
+    if (entries.length === 0) return books;
+
+    // Map ASIN → workId for fast lookup in the loop below
+    const asinToWorkId = new Map<string, string>();
+    for (const entry of entries) {
+      asinToWorkId.set(entry.asin, entry.workId);
+    }
+
+    // Walk the input once, preserving position. For each work seen, keep a
+    // running "best" book; for books not in any work, emit immediately.
+    const result: AudibleAudiobook[] = [];
+    const workIdToResultIndex = new Map<string, number>();
+
+    for (const book of books) {
+      const workId = asinToWorkId.get(book.asin);
+      if (!workId) {
+        result.push(book);
+        continue;
+      }
+
+      const existingIndex = workIdToResultIndex.get(workId);
+      if (existingIndex === undefined) {
+        workIdToResultIndex.set(workId, result.length);
+        result.push(book);
+        continue;
+      }
+
+      // A sibling from this work is already in the result. Keep whichever
+      // has the richer metadata; on tie, keep the earlier entry (already there).
+      const existing = result[existingIndex];
+      if (metadataScore(book) > metadataScore(existing)) {
+        result[existingIndex] = book;
+      }
+    }
+
+    const collapsed = books.length - result.length;
+    if (collapsed > 0) {
+      logger.debug('Collapsed books via works table', {
+        inputCount: books.length,
+        outputCount: result.length,
+        collapsed,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    logger.error('collapseByExistingWorks failed; returning input unchanged', {
+      error: error instanceof Error ? error.message : String(error),
+      bookCount: books.length,
+    });
+    return books;
   }
 }
 

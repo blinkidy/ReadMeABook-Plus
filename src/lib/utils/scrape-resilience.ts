@@ -38,12 +38,18 @@ export function getBrowserHeaders(userAgent: string): Record<string, string> {
 }
 
 /**
- * Jittered exponential backoff: 2^attempt * baseMs * random(0.5, 1.5)
+ * Jittered exponential backoff: 2^attempt * baseMs * random(0.5, 1.5),
+ * optionally capped so high attempt counts don't produce absurd waits.
  * Avoids predictable retry timing that is trivially fingerprinted.
  */
-export function jitteredBackoff(attempt: number, baseMs: number = 1000): number {
+export function jitteredBackoff(
+  attempt: number,
+  baseMs: number = 1000,
+  maxBackoffMs: number = Number.POSITIVE_INFINITY,
+): number {
   const jitter = 0.5 + Math.random(); // 0.5 – 1.5
-  return Math.round(Math.pow(2, attempt) * baseMs * jitter);
+  const raw = Math.pow(2, attempt) * baseMs * jitter;
+  return Math.round(Math.min(raw, maxBackoffMs));
 }
 
 /** Random integer in [minMs, maxMs] */

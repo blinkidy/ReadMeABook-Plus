@@ -67,6 +67,24 @@ describe('jitteredBackoff', () => {
     expect(value).toBeGreaterThanOrEqual(250);
     expect(value).toBeLessThanOrEqual(750);
   });
+
+  it('caps the result at maxBackoffMs when the raw backoff would exceed it', () => {
+    // attempt=10 with base=1000 produces 2^10 * 1000 * [0.5..1.5] = 512_000..1_536_000,
+    // all of which exceed a 60_000ms cap.
+    for (let i = 0; i < 50; i++) {
+      const value = jitteredBackoff(10, 1000, 60_000);
+      expect(value).toBeLessThanOrEqual(60_000);
+    }
+  });
+
+  it('returns the un-capped jittered value when below the cap', () => {
+    // attempt=0 with base=1000 produces 500..1500, all below a 60_000ms cap.
+    for (let i = 0; i < 50; i++) {
+      const value = jitteredBackoff(0, 1000, 60_000);
+      expect(value).toBeGreaterThanOrEqual(500);
+      expect(value).toBeLessThanOrEqual(1500);
+    }
+  });
 });
 
 describe('randomDelay', () => {

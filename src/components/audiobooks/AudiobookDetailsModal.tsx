@@ -38,6 +38,8 @@ interface AudiobookDetailsModalProps {
   hideRequestActions?: boolean;
   hasReportedIssue?: boolean;
   aiReason?: string | null;
+  /** Optional admin action buttons (Approve / Search / Deny) rendered as a second row in the action bar */
+  adminActions?: React.ReactNode;
 }
 
 // Status helper
@@ -80,6 +82,7 @@ export function AudiobookDetailsModal({
   hideRequestActions = false,
   hasReportedIssue = false,
   aiReason = null,
+  adminActions,
 }: AudiobookDetailsModalProps) {
   const { user } = useAuth();
   const { squareCovers } = usePreferences();
@@ -548,6 +551,30 @@ export function AudiobookDetailsModal({
                     </a>
                   </div>
 
+                  {/* Language */}
+                  {audiobook.language && (
+                    <div>
+                      <p className="text-gray-500 dark:text-gray-400">Language</p>
+                      <p className="text-gray-900 dark:text-gray-100 capitalize">{audiobook.language}</p>
+                    </div>
+                  )}
+
+                  {/* Format */}
+                  {audiobook.formatType && (
+                    <div>
+                      <p className="text-gray-500 dark:text-gray-400">Format</p>
+                      <p className="text-gray-900 dark:text-gray-100 capitalize">{audiobook.formatType}</p>
+                    </div>
+                  )}
+
+                  {/* Publisher */}
+                  {audiobook.publisherName && (
+                    <div>
+                      <p className="text-gray-500 dark:text-gray-400">Publisher</p>
+                      <p className="text-gray-900 dark:text-gray-100">{audiobook.publisherName}</p>
+                    </div>
+                  )}
+
                   {/* Download Link - subtle utility, visible from any context */}
                   {isAvailable && downloadAvailable && requestId && user?.permissions?.download !== false && (
                     <div>
@@ -739,6 +766,13 @@ export function AudiobookDetailsModal({
               )}
 
             </div>
+
+            {/* Admin Actions Row (Approve / Search / Deny) — injected by admin pages */}
+            {adminActions && (
+              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-amber-200 dark:border-amber-700/50">
+                {adminActions}
+              </div>
+            )}
           </div>
         )}
 

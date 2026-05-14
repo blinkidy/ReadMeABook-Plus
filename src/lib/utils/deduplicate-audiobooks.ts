@@ -109,7 +109,12 @@ export function areDurationsCompatible(a?: number, b?: number): boolean {
 // Metadata scoring (for picking best representative)
 // ---------------------------------------------------------------------------
 
-function metadataScore(book: AudibleAudiobook): number {
+/**
+ * Score a book by how much metadata it carries. Used as the tie-breaker when
+ * collapsing duplicates — the entry with the richest metadata wins. Exported
+ * so the works-table collapse pass can apply the same ranking.
+ */
+export function metadataScore(book: AudibleAudiobook): number {
   let score = 0;
   if (book.coverArtUrl) score++;
   if (book.rating != null) score++;

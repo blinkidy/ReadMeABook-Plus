@@ -198,4 +198,69 @@ describe('processAudibleRefresh', () => {
     const { processAudibleRefresh } = await import('@/lib/processors/audible-refresh.processor');
     await expect(processAudibleRefresh({ jobId: 'job-2' })).rejects.toThrow('DB down');
   });
+
+  it('deduplicates ASINs in the input list before persisting, preserving order', async () => {
+    // Two `A` entries should collapse to one. Final ranks must be contiguous
+    // (1, 2, 3) and follow Audible's editorial ordering (A, B, C).
+    const popular = [
+      { asin: 'A', title: 'Book A', author: 'X', coverArtUrl: null },
+      { asin: 'B', title: 'Book B', author: 'X', coverArtUrl: null },
+      { asin: 'A', title: 'Book A (duplicate)', author: 'X', coverArtUrl: null },
+      { asin: 'C', title: 'Book C', author: 'X', coverArtUrl: null },
+    ];
+
+    audibleServiceMock.getPopularAudiobooks.mockResolvedValue(popular);
+    audibleServiceMock.getNewReleases.mockResolvedValue([]);
+    thumbnailCacheMock.cleanupUnusedThumbnails.mockResolvedValue(0);
+    prismaMock.audibleCache.upsert.mockResolvedValue({});
+    prismaMock.audibleCacheCategory.deleteMany.mockResolvedValue({ count: 0 });
+    prismaMock.audibleCacheCategory.create.mockResolvedValue({});
+    prismaMock.userHomeSection.findMany.mockResolvedValue([]);
+    prismaMock.audibleCache.findMany.mockResolvedValue([]);
+
+    const { processAudibleRefresh } = await import('@/lib/processors/audible-refresh.processor');
+    const result = await processAudibleRefresh({ jobId: 'job-dedup' });
+
+    expect(result.popularSaved).toBe(3);
+
+    // Only 3 category entries created — the duplicate `A` was dropped.
+    const popularCreates = (prismaMock.audibleCacheCategory.create.mock.calls as Array<[{ data: { asin: string; categoryId: string; rank: number } }]>)
+      .map((c) => c[0].data)
+      .filter((d) => d.categoryId === '__popular__');
+    expect(popularCreates).toHaveLength(3);
+    expect(popularCreates.map((d) => d.asin)).toEqual(['A', 'B', 'C']);
+    expect(popularCreates.map((d) => d.rank)).toEqual([1, 2, 3]);
+
+    // upsert called once per unique ASIN, not per input row.
+    expect(prismaMock.audibleCache.upsert).toHaveBeenCalledTimes(3);
+  });
+
+  it('drops entries with missing ASINs as part of dedup', async () => {
+    const popular = [
+      { asin: 'A', title: 'Book A', author: 'X', coverArtUrl: null },
+      { asin: '', title: 'Book with empty asin', author: 'X', coverArtUrl: null },
+      { asin: null, title: 'Book with null asin', author: 'X', coverArtUrl: null },
+      { asin: 'B', title: 'Book B', author: 'X', coverArtUrl: null },
+    ];
+
+    audibleServiceMock.getPopularAudiobooks.mockResolvedValue(popular as any);
+    audibleServiceMock.getNewReleases.mockResolvedValue([]);
+    thumbnailCacheMock.cleanupUnusedThumbnails.mockResolvedValue(0);
+    prismaMock.audibleCache.upsert.mockResolvedValue({});
+    prismaMock.audibleCacheCategory.deleteMany.mockResolvedValue({ count: 0 });
+    prismaMock.audibleCacheCategory.create.mockResolvedValue({});
+    prismaMock.userHomeSection.findMany.mockResolvedValue([]);
+    prismaMock.audibleCache.findMany.mockResolvedValue([]);
+
+    const { processAudibleRefresh } = await import('@/lib/processors/audible-refresh.processor');
+    const result = await processAudibleRefresh({ jobId: 'job-empty-asin' });
+
+    expect(result.popularSaved).toBe(2);
+
+    const popularCreates = (prismaMock.audibleCacheCategory.create.mock.calls as Array<[{ data: { asin: string; categoryId: string; rank: number } }]>)
+      .map((c) => c[0].data)
+      .filter((d) => d.categoryId === '__popular__');
+    expect(popularCreates.map((d) => d.asin)).toEqual(['A', 'B']);
+    expect(popularCreates.map((d) => d.rank)).toEqual([1, 2]);
+  });
 });

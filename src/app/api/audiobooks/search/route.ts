@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAudibleService } from '@/lib/integrations/audible.service';
 import { enrichAudiobooksWithMatches } from '@/lib/utils/audiobook-matcher';
 import { deduplicateAndCollectGroups } from '@/lib/utils/deduplicate-audiobooks';
-import { persistDedupGroups } from '@/lib/services/works.service';
+import { persistDedupGroups, collapseByExistingWorks } from '@/lib/services/works.service';
 import { getCurrentUser } from '@/lib/middleware/auth';
 import { RMABLogger } from '@/lib/utils/logger';
 import { annotateWithIgnoreStatus } from '@/lib/utils/ignored-audiobooks';
@@ -41,16 +41,19 @@ export async function GET(request: NextRequest) {
     const currentUser = getCurrentUser(request);
     const userId = currentUser?.sub || undefined;
 
-    // Deduplicate before enrichment to avoid wasted DB queries on duplicate entries
+    // Two-pass dedup: local title/narrator/duration matching first, then collapse
+    // any remaining duplicates that the works table already knows are the same book
+    // (handles cases where source metadata diverges across paths or pages).
     const { books: dedupedResults, groups } = deduplicateAndCollectGroups(results.results);
 
-    // Fire-and-forget: persist dedup groups to works table for cross-ASIN matching
     if (groups.length > 0) {
       persistDedupGroups(groups).catch(() => {});
     }
 
+    const collapsedResults = await collapseByExistingWorks(dedupedResults);
+
     // Enrich search results with availability and request status information
-    const enrichedResults = await enrichAudiobooksWithMatches(dedupedResults, userId);
+    const enrichedResults = await enrichAudiobooksWithMatches(collapsedResults, userId);
 
     // Annotate with per-user ignore status
     const annotatedResults = await annotateWithIgnoreStatus(enrichedResults, userId);

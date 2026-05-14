@@ -14,8 +14,10 @@ import { RecentRequestsTable } from './components/RecentRequestsTable';
 import { ToastProvider, useToast } from '@/components/ui/Toast';
 import { ReportedIssuesSection } from './components/ReportedIssuesSection';
 import { InteractiveTorrentSearchModal } from '@/components/requests/InteractiveTorrentSearchModal';
+import { AudiobookDetailsModal } from '@/components/audiobooks/AudiobookDetailsModal';
 import { BulkImportWizard } from '@/components/admin/BulkImportWizard';
 import { TorrentResult } from '@/lib/utils/ranking-algorithm';
+import { InformationCircleIcon } from '@heroicons/react/24/outline';
 import { formatDistanceToNow } from 'date-fns';
 import { useState } from 'react';
 
@@ -56,13 +58,76 @@ function formatTorrentSize(bytes: number): string {
   return gb >= 1 ? `${gb.toFixed(1)} GB` : `${mb.toFixed(0)} MB`;
 }
 
+function LoadingSpinner() {
+  return (
+    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+    </svg>
+  );
+}
+
+interface ApprovalActionButtonsProps {
+  isLoading: boolean;
+  onApprove: () => void;
+  onSearch: () => void;
+  onDeny: () => void;
+}
+
+function ApprovalActionButtons({ isLoading, onApprove, onSearch, onDeny }: ApprovalActionButtonsProps) {
+  return (
+    <>
+      <button
+        onClick={onApprove}
+        disabled={isLoading}
+        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+      >
+        {isLoading ? <LoadingSpinner /> : (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+        <span>Approve</span>
+      </button>
+      <button
+        onClick={onSearch}
+        disabled={isLoading}
+        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <span>Search</span>
+      </button>
+      <button
+        onClick={onDeny}
+        disabled={isLoading}
+        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+      >
+        {isLoading ? <LoadingSpinner /> : (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        )}
+        <span>Deny</span>
+      </button>
+    </>
+  );
+}
+
 function PendingApprovalSection({ requests }: { requests: PendingApprovalRequest[] }) {
   const toast = useToast();
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
   const [searchModalRequestId, setSearchModalRequestId] = useState<string | null>(null);
+  const [detailsAsin, setDetailsAsin] = useState<string | null>(null);
+  const [detailsRequestId, setDetailsRequestId] = useState<string | null>(null);
 
   const searchModalRequest = searchModalRequestId
     ? requests.find((r) => r.id === searchModalRequestId)
+    : null;
+
+  const detailsRequest = detailsRequestId
+    ? requests.find((r) => r.id === detailsRequestId)
     : null;
 
   const handleApproveRequest = async (requestId: string) => {
@@ -125,13 +190,6 @@ function PendingApprovalSection({ requests }: { requests: PendingApprovalRequest
     await mutate('/api/admin/metrics');
   };
 
-  const LoadingSpinner = () => (
-    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-    </svg>
-  );
-
   return (
     <div className="mb-8">
       {/* Section Header */}
@@ -170,8 +228,23 @@ function PendingApprovalSection({ requests }: { requests: PendingApprovalRequest
           return (
             <div
               key={request.id}
-              className="bg-white dark:bg-gray-800 border-2 border-amber-200 dark:border-amber-800 rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+              className="relative bg-white dark:bg-gray-800 border-2 border-amber-200 dark:border-amber-800 rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden"
             >
+              {/* Info Button — opens AudiobookDetailsModal */}
+              {request.audiobook.audibleAsin && (
+                <button
+                  onClick={() => {
+                    setDetailsAsin(request.audiobook.audibleAsin);
+                    setDetailsRequestId(request.id);
+                  }}
+                  className="absolute top-2 right-2 z-10 p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                  title="View book details"
+                  aria-label="View book details"
+                >
+                  <InformationCircleIcon className="w-5 h-5" />
+                </button>
+              )}
+
               {/* Card Content */}
               <div className="p-4">
                 <div className="flex gap-3">
@@ -314,42 +387,12 @@ function PendingApprovalSection({ requests }: { requests: PendingApprovalRequest
 
               {/* Action Buttons */}
               <div className="border-t border-amber-200 dark:border-amber-800 bg-gray-50 dark:bg-gray-900/50 px-4 py-3 flex gap-2">
-                <button
-                  onClick={() => handleApproveRequest(request.id)}
-                  disabled={isLoading}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  {isLoading ? <LoadingSpinner /> : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                  <span>Approve</span>
-                </button>
-
-                <button
-                  onClick={() => setSearchModalRequestId(request.id)}
-                  disabled={isLoading}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <span>Search</span>
-                </button>
-
-                <button
-                  onClick={() => handleDenyRequest(request.id)}
-                  disabled={isLoading}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  {isLoading ? <LoadingSpinner /> : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  )}
-                  <span>Deny</span>
-                </button>
+                <ApprovalActionButtons
+                  isLoading={isLoading}
+                  onApprove={() => handleApproveRequest(request.id)}
+                  onSearch={() => setSearchModalRequestId(request.id)}
+                  onDeny={() => handleDenyRequest(request.id)}
+                />
               </div>
             </div>
           );
@@ -373,6 +416,37 @@ function PendingApprovalSection({ requests }: { requests: PendingApprovalRequest
           onSuccess={() => {
             setSearchModalRequestId(null);
           }}
+        />
+      )}
+
+      {/* Book Details Modal — opened via info button on each approval card */}
+      {detailsAsin && detailsRequestId && (
+        <AudiobookDetailsModal
+          asin={detailsAsin}
+          isOpen={true}
+          onClose={() => { setDetailsAsin(null); setDetailsRequestId(null); }}
+          requestStatus="awaiting_approval"
+          requestedByUsername={detailsRequest?.user.plexUsername ?? null}
+          adminActions={
+            <ApprovalActionButtons
+              isLoading={loadingStates[detailsRequestId] || false}
+              onApprove={async () => {
+                await handleApproveRequest(detailsRequestId);
+                setDetailsAsin(null);
+                setDetailsRequestId(null);
+              }}
+              onSearch={() => {
+                setSearchModalRequestId(detailsRequestId);
+                setDetailsAsin(null);
+                setDetailsRequestId(null);
+              }}
+              onDeny={async () => {
+                await handleDenyRequest(detailsRequestId);
+                setDetailsAsin(null);
+                setDetailsRequestId(null);
+              }}
+            />
+          }
         />
       )}
     </div>

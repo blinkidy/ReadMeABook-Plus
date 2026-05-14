@@ -19,6 +19,7 @@ import {
 import { RMABLogger } from '../utils/logger';
 import { parseRuntime } from '../utils/parse-runtime';
 import { randomDelay } from '../utils/scrape-resilience';
+import { extractAllNarrators } from '../utils/extract-narrator';
 
 const logger = RMABLogger.create('Audible.Series');
 
@@ -442,10 +443,8 @@ function parseSeriesBooks(
     const authorHref = authorLink.attr('href') || '';
     const authorAsinMatch = authorHref.match(/\/author\/[^/]+\/([A-Z0-9]{10})/);
 
-    // Narrator
-    const narratorText = $el.find('a[href*="searchNarrator="]').first().text().trim() ||
-      $el.find('.narratorLabel').text().trim() ||
-      '';
+    // Narrator — capture all narrator links (multi-narrator productions are common)
+    const narratorText = extractAllNarrators($, $el);
 
     // Cover art
     const coverArtUrl = $el.find('img').first().attr('src')?.replace(/\._.*_\./, '._SL500_.') || '';

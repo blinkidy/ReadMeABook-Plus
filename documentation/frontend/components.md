@@ -30,7 +30,7 @@ src/components/
 **Audiobooks**
 - **AudiobookCard** ✅ - Cover, title, author, narrator, duration, request button, clickable to open details modal. Shows "Requested by [username]" when someone else has requested the book, "Requested" when current user has requested it
 - **AudiobookGrid** - Responsive grid (1/2/3/4 cols)
-- **AudiobookDetailsModal** ✅ - Full-screen modal with comprehensive metadata (description, genres, rating, release date, narrator, request functionality). Shows requesting user's name when applicable
+- **AudiobookDetailsModal** ✅ - Full-screen modal with comprehensive metadata (description, genres, rating, release date, narrator, language, format, publisher, request functionality). Shows requesting user's name when applicable
 
 **Requests**
 - **RequestCard** ✅ - Cover, title, author, status badge, progress bar, timestamps, action buttons (cancel, manual search, interactive search)
@@ -113,6 +113,7 @@ interface AudiobookDetailsModalProps {
   requestStatus?: string | null;
   isAvailable?: boolean;
   requestedByUsername?: string | null;
+  adminActions?: React.ReactNode; // Optional admin buttons (Approve/Search/Deny) rendered as second row in action bar
 }
 
 interface RequestCardProps {
