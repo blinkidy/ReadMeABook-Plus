@@ -20,4 +20,14 @@ describe('StatusBadge', () => {
     render(<StatusBadge status="custom_status" />);
     expect(screen.getByText('custom_status')).toBeInTheDocument();
   });
+
+  it('renders the awaiting_release label with teal styling', () => {
+    render(<StatusBadge status="awaiting_release" />);
+    const badge = screen.getByText('Awaiting Release');
+    expect(badge).toBeInTheDocument();
+    expect(badge.className).toContain('bg-teal-100');
+    expect(badge.className).toContain('text-teal-800');
+    expect(badge.className).toContain('dark:bg-teal-900');
+    expect(badge.className).toContain('dark:text-teal-200');
+  });
 });

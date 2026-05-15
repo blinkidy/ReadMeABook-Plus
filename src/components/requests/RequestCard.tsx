@@ -27,6 +27,7 @@ interface RequestCardProps {
     updatedAt: string;
     completedAt?: string;
     downloadAvailable?: boolean;
+    releaseDate?: string | Date | null;
     audiobook: {
       id: string;
       audibleAsin?: string;
@@ -57,6 +58,18 @@ export function RequestCard({ request, showActions = true }: RequestCardProps) {
   const canCancel = (CANCELLABLE_STATUSES as readonly string[]).includes(request.status);
   const isActive = ['searching', 'downloading', 'processing'].includes(request.status);
   const isFailed = request.status === 'failed';
+
+  const releaseDateLabel = React.useMemo(() => {
+    if (request.status !== 'awaiting_release' || !request.releaseDate) return null;
+    const parsed = new Date(request.releaseDate);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  }, [request.status, request.releaseDate]);
 
   const handleConfirmCancel = async () => {
     try {
@@ -150,6 +163,11 @@ export function RequestCard({ request, showActions = true }: RequestCardProps) {
           {/* Status Badge and Type Badge */}
           <div className="flex items-center gap-2 flex-wrap">
             <StatusBadge status={request.status} progress={request.progress} />
+            {releaseDateLabel && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                Releases {releaseDateLabel}
+              </span>
+            )}
             {isEbook && (
               <span
                 className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full"

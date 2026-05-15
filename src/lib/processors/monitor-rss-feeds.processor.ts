@@ -8,6 +8,7 @@
 import { prisma } from '../db';
 import { RMABLogger } from '../utils/logger';
 import { getJobQueueService } from '../services/job-queue.service';
+import { shouldSkipAutoSearch } from '../utils/release-date';
 
 export interface MonitorRssFeedsPayload {
   jobId?: string;
@@ -24,6 +25,9 @@ export async function processMonitorRssFeeds(payload: MonitorRssFeedsPayload): P
   const { getConfigService } = await import('../services/config.service');
   const configService = getConfigService();
   const indexersConfigStr = await configService.get('prowlarr_indexers');
+
+  // Read skip-unreleased setting once at start (default ON when absent)
+  const skipUnreleasedSetting = (await configService.get('indexer.skip_unreleased')) !== 'false';
 
   if (!indexersConfigStr) {
     logger.warn(`No indexers configured, skipping`);
@@ -94,6 +98,21 @@ export async function processMonitorRssFeeds(payload: MonitorRssFeedsPayload): P
 
       if (hasAuthor && titleMatchCount >= 2) {
         logger.info(`Match found! "${audiobook.title}" by ${audiobook.author} matches torrent: ${torrent.title}`);
+
+        // Release-date gate: skip RSS-driven auto-search for unreleased books.
+        // Does NOT mutate request.status — retry job is the sole owner of
+        // awaiting_search ↔ awaiting_release transitions.
+        const gate = shouldSkipAutoSearch({ releaseDate: request.releaseDate }, skipUnreleasedSetting);
+        if (gate.skip) {
+          logger.info(`Skipped RSS auto-search for unreleased book`, {
+            gateSource: 'MonitorRssFeeds',
+            requestId: request.id,
+            audiobookTitle: audiobook.title,
+            releaseDate: request.releaseDate?.toISOString() ?? null,
+          });
+          // Match exists but is gated — preserve "only trigger once per request" semantics.
+          break;
+        }
 
         // Trigger appropriate search job based on request type
         try {

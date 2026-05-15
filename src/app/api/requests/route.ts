@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
 // Status groups for server-side filtering and count aggregation
 const STATUS_GROUPS: Record<string, string[]> = {
   active:    ['pending', 'searching', 'downloading', 'processing'],
-  waiting:   ['awaiting_search', 'awaiting_import', 'awaiting_approval'],
+  waiting:   ['awaiting_search', 'awaiting_import', 'awaiting_approval', 'awaiting_release'],
   completed: ['available', 'downloaded'],
   failed:    ['failed'],
   cancelled: ['cancelled', 'denied'],

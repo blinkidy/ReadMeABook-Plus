@@ -137,6 +137,48 @@ export function IndexersTab({
       </div>
 
       <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+        <div className="mb-4">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+            Auto-Search Behavior
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Control how ReadMeABook performs automatic background searches across your indexers.
+          </p>
+        </div>
+
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-start gap-4">
+            <input
+              type="checkbox"
+              id="indexer-skip-unreleased"
+              checked={settings.indexerOptions.skipUnreleased}
+              onChange={(e) =>
+                onChange({
+                  ...settings,
+                  indexerOptions: {
+                    ...settings.indexerOptions,
+                    skipUnreleased: e.target.checked,
+                  },
+                })
+              }
+              className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <div className="flex-1">
+              <label
+                htmlFor="indexer-skip-unreleased"
+                className="block text-sm font-medium text-gray-900 dark:text-gray-100 cursor-pointer"
+              >
+                Skip unreleased books in automatic searches
+              </label>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                When ON, ReadMeABook will not search indexers for books whose release date is in the future. These requests will automatically begin searching once the book is released. Manual searches are not affected.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
         <IndexerManagement
           prowlarrUrl={settings.prowlarr.url}
           prowlarrApiKey={settings.prowlarr.apiKey}

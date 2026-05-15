@@ -16,6 +16,7 @@ export interface Settings {
   oidc: OIDCSettings;
   registration: RegistrationSettings;
   prowlarr: ProwlarrSettings;
+  indexerOptions: IndexerOptionsSettings;
   downloadClient: DownloadClientSettings;
   paths: PathsSettings;
   ebook: EbookSettings;
@@ -74,6 +75,19 @@ export interface RegistrationSettings {
 export interface ProwlarrSettings {
   url: string;
   apiKey: string;
+}
+
+/**
+ * Indexer-wide behavioral options (not tied to a specific indexer connection).
+ * Persisted via `/api/admin/settings/indexer-options`.
+ */
+export interface IndexerOptionsSettings {
+  /**
+   * When true, automatic indexer searches skip books whose release date is
+   * in the future. Default ON. Manual searches are unaffected.
+   * Backing config key: `indexer.skip_unreleased`.
+   */
+  skipUnreleased: boolean;
 }
 
 /**

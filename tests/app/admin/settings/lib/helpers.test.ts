@@ -40,6 +40,7 @@ const baseSettings = {
   },
   registration: { enabled: true, requireAdminApproval: false },
   prowlarr: { url: 'http://prowlarr', apiKey: 'key' },
+  indexerOptions: { skipUnreleased: true },
   downloadClient: {
     type: 'qbittorrent',
     url: 'http://qb',
@@ -276,6 +277,7 @@ describe('admin settings helpers', () => {
   it('saves prowlarr settings with enabled indexers and flag configs', async () => {
     fetchWithAuthMock
       .mockResolvedValueOnce(makeOk())
+      .mockResolvedValueOnce(makeOk())
       .mockResolvedValueOnce(makeOk());
 
     const { saveTabSettings } = await import('@/app/admin/settings/lib/helpers');
@@ -289,6 +291,16 @@ describe('admin settings helpers', () => {
     const body = JSON.parse((fetchWithAuthMock.mock.calls[1][1] as RequestInit).body as string);
     expect(body.indexers[0].enabled).toBe(true);
     expect(body.flagConfigs).toHaveLength(1);
+
+    // Indexer options PUT goes last in the prowlarr tab save flow.
+    expect(fetchWithAuthMock).toHaveBeenCalledWith(
+      '/api/admin/settings/indexer-options',
+      expect.objectContaining({ method: 'PUT' })
+    );
+    const optionsBody = JSON.parse(
+      (fetchWithAuthMock.mock.calls[2][1] as RequestInit).body as string
+    );
+    expect(optionsBody.skipUnreleased).toBe(true);
   });
 
   it('saves download and paths settings', async () => {

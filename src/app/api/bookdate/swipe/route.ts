@@ -7,7 +7,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, AuthenticatedRequest } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/db';
 import { getAudibleService } from '@/lib/integrations/audible.service';
+import { getConfigService } from '@/lib/services/config.service';
 import { RMABLogger } from '@/lib/utils/logger';
+import { shouldSkipAutoSearch } from '@/lib/utils/release-date';
 
 const logger = RMABLogger.create('API.BookDateSwipe');
 
@@ -67,16 +69,21 @@ async function handler(req: AuthenticatedRequest) {
         let year: number | undefined;
         let series: string | undefined;
         let seriesPart: string | undefined;
+        let releaseDate: Date | null = null;
         try {
           const audibleService = getAudibleService();
           const audnexusData = await audibleService.getAudiobookDetails(recommendation.audnexusAsin);
 
           if (audnexusData?.releaseDate) {
             try {
-              const releaseYear = new Date(audnexusData.releaseDate).getFullYear();
-              if (!isNaN(releaseYear)) {
-                year = releaseYear;
-                logger.debug(`Extracted year ${year} from Audnexus releaseDate: ${audnexusData.releaseDate}`);
+              const parsed = new Date(audnexusData.releaseDate);
+              if (!isNaN(parsed.getTime())) {
+                releaseDate = parsed;
+                const releaseYear = parsed.getFullYear();
+                if (!isNaN(releaseYear)) {
+                  year = releaseYear;
+                  logger.debug(`Extracted year ${year} from Audnexus releaseDate: ${audnexusData.releaseDate}`);
+                }
               }
             } catch (error) {
               logger.warn(`Failed to parse Audnexus releaseDate "${audnexusData.releaseDate}": ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -181,8 +188,28 @@ async function handler(req: AuthenticatedRequest) {
             }
           }
 
+          // Evaluate release-date gate (only when not pending approval)
+          let releaseGateSkip = false;
+          if (!needsApproval) {
+            try {
+              const configService = getConfigService();
+              const skipUnreleasedSetting = (await configService.get('indexer.skip_unreleased')) !== 'false';
+              const gate = shouldSkipAutoSearch({ releaseDate }, skipUnreleasedSetting);
+              releaseGateSkip = gate.skip;
+            } catch (error) {
+              logger.warn(`Failed to evaluate release-date gate: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+          }
+
           // Determine initial status
-          const initialStatus = needsApproval ? 'awaiting_approval' : 'pending';
+          let initialStatus: string;
+          if (needsApproval) {
+            initialStatus = 'awaiting_approval';
+          } else if (releaseGateSkip) {
+            initialStatus = 'awaiting_release';
+          } else {
+            initialStatus = 'pending';
+          }
 
           const newRequest = await prisma.request.create({
             data: {
@@ -191,10 +218,20 @@ async function handler(req: AuthenticatedRequest) {
               status: initialStatus,
               type: 'audiobook', // Explicit type for user-created requests
               priority: 0,
+              releaseDate,
             },
           });
 
           logger.info(`Created request for "${recommendation.title}" with status: ${initialStatus}`);
+
+          if (releaseGateSkip) {
+            logger.info(`Skipped auto-search for unreleased book`, {
+              gateSource: 'BookDateSwipe',
+              requestId: newRequest.id,
+              audiobookTitle: audiobook.title,
+              releaseDate: releaseDate?.toISOString() ?? null,
+            });
+          }
 
           // Import job queue service
           const { getJobQueueService } = await import('@/lib/services/job-queue.service');
@@ -224,15 +261,17 @@ async function handler(req: AuthenticatedRequest) {
               logger.error('Failed to queue notification', { error: error instanceof Error ? error.message : String(error) });
             });
 
-            // Trigger search job only if auto-approved
-            await jobQueue.addSearchJob(newRequest.id, {
-              id: audiobook.id,
-              title: audiobook.title,
-              author: audiobook.author,
-              asin: audiobook.audibleAsin || undefined,
-            });
+            // Trigger search job only if auto-approved AND not gated by release date
+            if (!releaseGateSkip) {
+              await jobQueue.addSearchJob(newRequest.id, {
+                id: audiobook.id,
+                title: audiobook.title,
+                author: audiobook.author,
+                asin: audiobook.audibleAsin || undefined,
+              });
 
-            logger.info(`Triggered search job for request ${newRequest.id}`);
+              logger.info(`Triggered search job for request ${newRequest.id}`);
+            }
           }
         }
 

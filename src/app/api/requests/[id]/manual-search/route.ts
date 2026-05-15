@@ -52,8 +52,8 @@ export async function POST(
         );
       }
 
-      // Only allow manual search for pending, failed, awaiting_search statuses
-      const searchableStatuses = ['pending', 'failed', 'awaiting_search'];
+      // Only allow manual search for pending, failed, awaiting_search, awaiting_release statuses
+      const searchableStatuses = ['pending', 'failed', 'awaiting_search', 'awaiting_release'];
       if (!searchableStatuses.includes(requestRecord.status)) {
         return NextResponse.json(
           {

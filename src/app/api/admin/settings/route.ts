@@ -81,6 +81,12 @@ export async function GET(request: NextRequest) {
         url: configMap.get('prowlarr_url') || '',
         apiKey: maskValue('api_key', configMap.get('prowlarr_api_key')),
       },
+      indexerOptions: {
+        // Default ON: missing or any value other than 'false' is treated as enabled.
+        // Must stay in lock-step with /api/admin/settings/indexer-options read contract
+        // and any background worker that reads `indexer.skip_unreleased` directly.
+        skipUnreleased: configMap.get('indexer.skip_unreleased') !== 'false',
+      },
       // downloadClient is populated from multi-client format for backward compatibility
       // The DownloadTab component now uses DownloadClientManagement which reads from /api/admin/settings/download-clients
       downloadClient: (() => {

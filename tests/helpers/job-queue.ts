@@ -7,6 +7,7 @@ import { vi } from 'vitest';
 
 export const createJobQueueMock = () => ({
   addSearchJob: vi.fn(),
+  addSearchEbookJob: vi.fn(),
   addDownloadJob: vi.fn(),
   addMonitorJob: vi.fn(),
   addOrganizeJob: vi.fn(),

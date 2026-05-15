@@ -223,7 +223,7 @@ model Request {
   userId           String    @map("user_id")
   audiobookId      String    @map("audiobook_id")
   status           String    @default("pending")
-  // Status values: pending, awaiting_approval, denied, searching, downloading, processing, downloaded, available, failed, cancelled, awaiting_search, awaiting_import, warn
+  // Status values: pending, awaiting_approval, denied, searching, downloading, processing, downloaded, available, failed, cancelled, awaiting_search, awaiting_import, awaiting_release, warn
   // Flow (audiobook): pending → searching → downloading → processing → downloaded → available (when matched in Plex)
   // Flow (ebook): pending → searching → downloading → processing → downloaded (terminal - no available state)
   progress         Int       @default(0) // 0-100
@@ -240,6 +240,7 @@ model Request {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
   completedAt      DateTime? @map("completed_at")
+  releaseDate      DateTime? @map("release_date") @db.Date // Book release date (copied from Audnexus on creation). Used by skip-unreleased-auto-search gate.
 
   // Request type: 'audiobook' (default) or 'ebook'
   // Ebook requests are created automatically when an audiobook is organized (if ebook downloads enabled)

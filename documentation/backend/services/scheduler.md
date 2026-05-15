@@ -18,10 +18,10 @@ Manages recurring/scheduled jobs providing automated tasks (Plex scans, Audible 
 1. **plex_library_scan** - Default: every 6 hours, full library scan, disabled by default (enable after setup)
 2. **plex_recently_added_check** - Default: every 5 minutes, lightweight polling of top 10 recently added items, enabled by default
 3. **audible_refresh** - Default: daily midnight, fetches 200 popular + 200 new releases, stores with rankings, disabled by default
-4. **retry_missing_torrents** - Default: daily midnight, re-searches 'awaiting_search' status (limit 50), handles both audiobook and ebook requests, enabled by default
+4. **retry_missing_torrents** - Default: daily midnight, processes union of `awaiting_search` ∪ `awaiting_release` (limit 50), handles both audiobook and ebook requests. Bidirectional transitions: `awaiting_search` → `awaiting_release` when release date is future + `indexer.skip_unreleased` ON; `awaiting_release` → `awaiting_search` + run search when release date has passed or setting OFF. Sole owner of these transitions. Enabled by default.
 5. **retry_failed_imports** - Default: every 6 hours, re-attempts 'awaiting_import' status (limit 50), enabled by default
 6. **cleanup_seeded_torrents** - Default: every 30 mins, deletes torrents after seeding requirements met, respects `seeding_time_minutes` config (0 = never), enabled by default
-7. **monitor_rss_feeds** - Default: every 15 mins, checks RSS feeds from enabled indexers, matches against 'awaiting_search' requests (audiobook and ebook, limit 100), triggers appropriate search jobs for matches, enabled by default
+7. **monitor_rss_feeds** - Default: every 15 mins, checks RSS feeds from enabled indexers, matches against `awaiting_search` requests (audiobook and ebook, limit 100). Query is unchanged — release-date gate is applied AFTER a match is found: if matched book is unreleased + `indexer.skip_unreleased` ON, the match is skipped and request status is NOT mutated (retry job owns transitions). Enabled by default.
 
 ## Architecture: Bull + Cron
 

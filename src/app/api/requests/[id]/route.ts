@@ -182,7 +182,7 @@ export async function PATCH(
       } else if (action === 'retry') {
         // Retry failed request - allow users to retry their own warn/failed requests
         // Only allow retry for failed, warn, or awaiting_* statuses
-        const retryableStatuses = ['failed', 'warn', 'awaiting_search', 'awaiting_import'];
+        const retryableStatuses = ['failed', 'warn', 'awaiting_search', 'awaiting_import', 'awaiting_release'];
 
         if (!retryableStatuses.includes(requestRecord.status)) {
           return NextResponse.json(

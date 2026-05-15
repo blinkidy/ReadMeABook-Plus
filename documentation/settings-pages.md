@@ -130,6 +130,25 @@ src/app/admin/settings/
 }
 ```
 
+## Auto-Search Behavior (Indexers tab)
+
+**Purpose:** Control how ReadMeABook performs automatic indexer searches. Lives on the Indexers tab between the Prowlarr connection block and the IndexerManagement list.
+
+**Toggle:** Skip unreleased books in automatic searches
+- When ON: auto-search skips books whose release date is in the future. Those requests automatically start searching once the book is released. Manual searches are unaffected.
+- When OFF: auto-search proceeds regardless of release date.
+
+**Configuration Key:**
+| Key | Default | Category | Description |
+|-----|---------|----------|-------------|
+| `indexer.skip_unreleased` | `true` (ON) | `indexer` | Skip auto-searches for books with future release dates |
+
+**Read contract (consumed by background workers):**
+- `value !== 'false'` → ON (skip enabled). Missing key OR any non-`'false'` value → ON.
+- Only the exact string `'false'` disables the toggle. Workers MUST match this.
+
+**API:** Persisted via `PUT /api/admin/settings/indexer-options`. Saved alongside Prowlarr connection + indexer config when the Indexers tab Save button is clicked.
+
 ## Audible Region
 
 **Purpose:** Configure which Audible region to use for metadata and search to ensure accurate ASIN matching with your metadata engine.
@@ -278,6 +297,17 @@ src/app/admin/settings/
 - Updates indexer configuration (enabled, priority, seeding time, RSS)
 - No test required if URL/API key unchanged
 - Saves only enabled indexers to database
+
+**GET /api/admin/settings/indexer-options**
+- Returns `{ skipUnreleased: boolean }`
+- Default ON: missing or non-`'false'` value resolves to `true`
+- Admin auth required
+
+**PUT /api/admin/settings/indexer-options**
+- Updates indexer-wide auto-search options
+- Body: `{ skipUnreleased: boolean }` (strict boolean validation)
+- Persists `indexer.skip_unreleased` (category: `indexer`)
+- No connection test required
 
 **PUT /api/admin/settings/download-client**
 - Updates download client config

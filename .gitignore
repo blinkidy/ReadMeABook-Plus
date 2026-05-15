@@ -57,3 +57,6 @@ next-env.d.ts
 /test-data
 /bookdrop
 dockerfile.patch
+
+# zach-flow scratch artifacts (locked briefs, orchestrator state)
+.zach-flow/

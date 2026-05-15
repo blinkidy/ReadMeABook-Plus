@@ -9,9 +9,11 @@
 
 import { prisma } from '@/lib/db';
 import { getJobQueueService } from '@/lib/services/job-queue.service';
+import { getConfigService } from '@/lib/services/config.service';
 import { findPlexMatch } from '@/lib/utils/audiobook-matcher';
 import { getAudibleService } from '@/lib/integrations/audible.service';
 import { RMABLogger } from '@/lib/utils/logger';
+import { shouldSkipAutoSearch } from '@/lib/utils/release-date';
 import { seedAsin, getSiblingAsins } from '@/lib/services/works.service';
 
 const logger = RMABLogger.create('RequestCreator');
@@ -95,20 +97,25 @@ export async function createRequestForUser(
     }
   }
 
-  // Fetch full details from Audnexus for year/series
+  // Fetch full details from Audnexus for year/series/releaseDate
   let year: number | undefined;
   let series: string | undefined;
   let seriesPart: string | undefined;
   let seriesAsin: string | undefined;
+  let releaseDate: Date | null = null;
   try {
     const audibleService = getAudibleService();
     const audnexusData = await audibleService.getAudiobookDetails(audiobook.asin);
 
     if (audnexusData?.releaseDate) {
       try {
-        const releaseYear = new Date(audnexusData.releaseDate).getFullYear();
-        if (!isNaN(releaseYear)) {
-          year = releaseYear;
+        const parsed = new Date(audnexusData.releaseDate);
+        if (!isNaN(parsed.getTime())) {
+          releaseDate = parsed;
+          const releaseYear = parsed.getFullYear();
+          if (!isNaN(releaseYear)) {
+            year = releaseYear;
+          }
         }
       } catch {
         // Ignore parse errors
@@ -242,12 +249,28 @@ export async function createRequestForUser(
     }
   }
 
+  // Evaluate release-date gate (skip-unreleased-auto-search)
+  let releaseGateSkip = false;
+  if (!needsApproval && !skipAutoSearch) {
+    try {
+      const configService = getConfigService();
+      const skipUnreleasedSetting = (await configService.get('indexer.skip_unreleased')) !== 'false';
+      const gate = shouldSkipAutoSearch({ releaseDate }, skipUnreleasedSetting);
+      releaseGateSkip = gate.skip;
+    } catch (error) {
+      logger.warn(`Failed to evaluate release-date gate: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   let initialStatus: string;
   if (needsApproval) {
     initialStatus = 'awaiting_approval';
     shouldTriggerSearch = false;
   } else if (skipAutoSearch) {
     initialStatus = 'awaiting_search';
+  } else if (releaseGateSkip) {
+    initialStatus = 'awaiting_release';
+    shouldTriggerSearch = false;
   } else {
     initialStatus = 'pending';
   }
@@ -260,12 +283,22 @@ export async function createRequestForUser(
       status: initialStatus,
       type: 'audiobook',
       progress: 0,
+      releaseDate,
     },
     include: {
       audiobook: true,
       user: { select: { id: true, plexUsername: true } },
     },
   });
+
+  if (releaseGateSkip) {
+    logger.info(`Skipped auto-search for unreleased book`, {
+      gateSource: 'InitialAutoSearch',
+      requestId: newRequest.id,
+      audiobookTitle: audiobookRecord.title,
+      releaseDate: releaseDate?.toISOString() ?? null,
+    });
+  }
 
   const jobQueue = getJobQueueService();
 

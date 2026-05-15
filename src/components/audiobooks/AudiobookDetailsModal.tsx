@@ -53,7 +53,7 @@ const getStatusInfo = (isAvailable: boolean, requestStatus: string | null, reque
     return { type: 'processing', label: 'Processing', canRequest: false };
   }
 
-  const pendingStatuses = ['pending', 'awaiting_search', 'searching', 'awaiting_approval'];
+  const pendingStatuses = ['pending', 'awaiting_search', 'awaiting_release', 'searching', 'awaiting_approval'];
   if (requestStatus && pendingStatuses.includes(requestStatus)) {
     const label = requestStatus === 'awaiting_approval'
       ? requestedByUsername ? `Pending Approval (${requestedByUsername})` : 'Pending Approval'

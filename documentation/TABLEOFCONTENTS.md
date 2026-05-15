@@ -59,6 +59,7 @@
 - **Ebook delete behavior (files only, torrents seed)** → [integrations/ebook-sidecar.md](integrations/ebook-sidecar.md#delete-behavior)
 - **Ebook settings (3-section UI)** → [settings-pages.md](settings-pages.md#e-book-sidecar)
 - **Indexer categories (audiobook/ebook tabs)** → [settings-pages.md](settings-pages.md#indexer-categories-tabbed)
+- **Auto-search behavior toggle (skip unreleased books)** → [settings-pages.md](settings-pages.md#auto-search-behavior-indexers-tab)
 
 ## Automation Pipeline
 - **Full pipeline overview** → [phase3/README.md](phase3/README.md)

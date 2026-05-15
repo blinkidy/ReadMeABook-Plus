@@ -34,7 +34,7 @@ const getStatusConfig = (audiobook: Audiobook) => {
     return { type: 'processing', label: 'Processing', color: 'amber' };
   }
 
-  const pendingStatuses = ['pending', 'awaiting_search', 'searching', 'awaiting_approval'];
+  const pendingStatuses = ['pending', 'awaiting_search', 'awaiting_release', 'searching', 'awaiting_approval'];
   if (audiobook.requestStatus && pendingStatuses.includes(audiobook.requestStatus)) {
     return { type: 'pending', label: 'Requested', color: 'blue' };
   }

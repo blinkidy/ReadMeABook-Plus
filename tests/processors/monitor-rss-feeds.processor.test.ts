@@ -28,15 +28,26 @@ vi.mock('@/lib/integrations/prowlarr.service', () => ({
   getProwlarrService: () => prowlarrMock,
 }));
 
+function futureDate(days = 30): Date {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+}
+
 describe('processMonitorRssFeeds', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('matches RSS items and queues search jobs', async () => {
-    configMock.get.mockResolvedValue(
-      JSON.stringify([{ id: 1, name: 'Indexer', rssEnabled: true }])
-    );
+    // Indexer config + skip_unreleased setting both read via the same mock — return appropriate value per key.
+    configMock.get.mockImplementation(async (key: string) => {
+      if (key === 'prowlarr_indexers') {
+        return JSON.stringify([{ id: 1, name: 'Indexer', rssEnabled: true }]);
+      }
+      if (key === 'indexer.skip_unreleased') {
+        return null; // default ON
+      }
+      return null;
+    });
 
     prowlarrMock.getAllRssFeeds.mockResolvedValue([
       { title: 'Great Book - Author Name' },
@@ -45,6 +56,9 @@ describe('processMonitorRssFeeds', () => {
     prismaMock.request.findMany.mockResolvedValue([
       {
         id: 'req-1',
+        type: 'audiobook',
+        status: 'awaiting_search',
+        releaseDate: null,
         audiobook: { id: 'a1', title: 'Great Book', author: 'Author Name', audibleAsin: 'ASIN1' },
       },
     ]);
@@ -58,6 +72,75 @@ describe('processMonitorRssFeeds', () => {
       expect.objectContaining({ title: 'Great Book', author: 'Author Name' })
     );
   });
+
+  it('skips RSS auto-search when matched book is unreleased and setting ON', async () => {
+    configMock.get.mockImplementation(async (key: string) => {
+      if (key === 'prowlarr_indexers') {
+        return JSON.stringify([{ id: 1, name: 'Indexer', rssEnabled: true }]);
+      }
+      if (key === 'indexer.skip_unreleased') {
+        return 'true';
+      }
+      return null;
+    });
+
+    prowlarrMock.getAllRssFeeds.mockResolvedValue([
+      { title: 'Future Book - Author Name' },
+    ]);
+
+    prismaMock.request.findMany.mockResolvedValue([
+      {
+        id: 'req-future',
+        type: 'audiobook',
+        status: 'awaiting_search',
+        releaseDate: futureDate(45),
+        audiobook: { id: 'a-future', title: 'Future Book', author: 'Author Name', audibleAsin: 'ASIN-F' },
+      },
+    ]);
+
+    const { processMonitorRssFeeds } = await import('@/lib/processors/monitor-rss-feeds.processor');
+    const result = await processMonitorRssFeeds({ jobId: 'job-2' });
+
+    expect(result.success).toBe(true);
+    expect(jobQueueMock.addSearchJob).not.toHaveBeenCalled();
+    expect(jobQueueMock.addSearchEbookJob).not.toHaveBeenCalled();
+    // Request status must not be mutated by RSS processor.
+    expect(prismaMock.request.update).not.toHaveBeenCalled();
+  });
+
+  it('runs RSS search when matched book is unreleased but setting is OFF', async () => {
+    configMock.get.mockImplementation(async (key: string) => {
+      if (key === 'prowlarr_indexers') {
+        return JSON.stringify([{ id: 1, name: 'Indexer', rssEnabled: true }]);
+      }
+      if (key === 'indexer.skip_unreleased') {
+        return 'false';
+      }
+      return null;
+    });
+
+    prowlarrMock.getAllRssFeeds.mockResolvedValue([
+      { title: 'Future Book - Author Name' },
+    ]);
+
+    prismaMock.request.findMany.mockResolvedValue([
+      {
+        id: 'req-future-off',
+        type: 'audiobook',
+        status: 'awaiting_search',
+        releaseDate: futureDate(45),
+        audiobook: { id: 'a-future', title: 'Future Book', author: 'Author Name', audibleAsin: 'ASIN-F' },
+      },
+    ]);
+
+    const { processMonitorRssFeeds } = await import('@/lib/processors/monitor-rss-feeds.processor');
+    const result = await processMonitorRssFeeds({ jobId: 'job-3' });
+
+    expect(result.success).toBe(true);
+    expect(jobQueueMock.addSearchJob).toHaveBeenCalledWith(
+      'req-future-off',
+      expect.objectContaining({ title: 'Future Book', author: 'Author Name' })
+    );
+    expect(prismaMock.request.update).not.toHaveBeenCalled();
+  });
 });
-
-

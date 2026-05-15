@@ -60,12 +60,14 @@ PostgreSQL database storing users, audiobooks, requests, downloads, configuratio
 
 ### Requests
 - `id` (UUID PK), `user_id` (FK), `audiobook_id` (FK)
-- `status` ('pending'|'searching'|'downloading'|'processing'|'downloaded'|'available'|'failed'|'cancelled'|'awaiting_search'|'awaiting_import'|'warn'|'awaiting_approval'|'denied')
+- `status` ('pending'|'searching'|'downloading'|'processing'|'downloaded'|'available'|'failed'|'cancelled'|'awaiting_search'|'awaiting_import'|'awaiting_release'|'warn'|'awaiting_approval'|'denied')
   - **Approval flow:** awaiting_approval → (approve) → pending → searching → downloading → processing → downloaded → available
   - **Denial flow:** awaiting_approval → (deny) → denied
   - **awaiting_approval** - Request pending admin approval (only if auto-approve disabled)
   - **denied** - Request rejected by admin (terminal state)
   - **pending** - Request approved and queued for processing
+  - **awaiting_release** - Book has a future release date; auto-search skipped until release (admin toggle controls behavior)
+- `release_date` (Date, nullable) - Book release date snapshot from Audnexus at request creation; used by skip-unreleased-auto-search gate
 - `progress` (0-100), `priority`, `error_message`
 - `search_attempts`, `download_attempts`, `import_attempts`, `max_import_retries` (default 5)
 - `last_search_at`, `last_import_at`, `created_at`, `updated_at`, `completed_at`

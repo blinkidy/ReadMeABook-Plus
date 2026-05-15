@@ -113,6 +113,17 @@ export const saveTabSettings = async (
       }).then(res => {
         if (!res.ok) throw new Error('Failed to save indexer configuration');
       });
+
+      // Save indexer-wide options (auto-search behavior, etc.)
+      await fetchWithAuth('/api/admin/settings/indexer-options', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          skipUnreleased: settings.indexerOptions.skipUnreleased,
+        }),
+      }).then(res => {
+        if (!res.ok) throw new Error('Failed to save indexer options');
+      });
       break;
 
     case 'download':

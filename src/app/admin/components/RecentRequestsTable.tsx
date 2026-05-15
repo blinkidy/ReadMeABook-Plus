@@ -55,6 +55,7 @@ const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending' },
   { value: 'awaiting_approval', label: 'Awaiting Approval' },
   { value: 'awaiting_search', label: 'Awaiting Search' },
+  { value: 'awaiting_release', label: 'Awaiting Release' },
   { value: 'searching', label: 'Searching' },
   { value: 'downloading', label: 'Downloading' },
   { value: 'processing', label: 'Processing' },
@@ -78,6 +79,7 @@ function getStatusBadge(status: string) {
     pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
     awaiting_approval: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
     awaiting_search: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+    awaiting_release: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200',
     searching: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
     downloading: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
     downloaded: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
@@ -95,6 +97,7 @@ function getStatusBadge(status: string) {
 
   const labels: Record<string, string> = {
     awaiting_search: 'Awaiting Search',
+    awaiting_release: 'Awaiting Release',
     awaiting_import: 'Awaiting Import',
     awaiting_approval: 'Awaiting Approval',
   };

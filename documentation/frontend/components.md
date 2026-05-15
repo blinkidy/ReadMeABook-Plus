@@ -33,8 +33,8 @@ src/components/
 - **AudiobookDetailsModal** ✅ - Full-screen modal with comprehensive metadata (description, genres, rating, release date, narrator, language, format, publisher, request functionality). Shows requesting user's name when applicable
 
 **Requests**
-- **RequestCard** ✅ - Cover, title, author, status badge, progress bar, timestamps, action buttons (cancel, manual search, interactive search)
-- **StatusBadge** - Color-coded status (pending=yellow, searching=blue, downloading=purple, downloaded=green, processing=orange, available=green, completed=green, failed=red, warn=orange, cancelled=gray). Shows "Initializing..." when downloading with 0% progress (fetching torrent info), "Downloading" when progress > 0%
+- **RequestCard** ✅ - Cover, title, author, status badge, progress bar, timestamps, action buttons (cancel, manual search, interactive search). When status=`awaiting_release` and `releaseDate` is set, shows "Releases &lt;Mon DD, YYYY&gt;" next to the status badge (UTC-formatted)
+- **StatusBadge** - Color-coded status (pending=yellow, awaiting_search=yellow, searching=blue, downloading=purple, downloaded=green, processing=orange, awaiting_import=orange, available=green, completed=green, failed=red, warn=orange, cancelled=gray, awaiting_approval=yellow, awaiting_release=teal "Awaiting Release", denied=red). Shows "Initializing..." when downloading with 0% progress (fetching torrent info), "Downloading" when progress > 0%
 - **ProgressBar** - Animated fill with percentage
 - **InteractiveTorrentSearchModal** ✅ - Responsive table of ranked torrent results, uses ConfirmModal for downloads, hides columns on smaller screens (size on mobile, seeds on tablet, indexer on desktop)
 - Active indicator: "Setting up..." with spinner when progress = 0%, "Active" with pulsing dot when progress > 0%

@@ -170,4 +170,52 @@ describe('RequestCard', () => {
 
     expect(screen.getByText(/Completed/)).toBeInTheDocument();
   });
+
+  it('renders release date when status is awaiting_release and releaseDate is provided', async () => {
+    const { RequestCard } = await import('@/components/requests/RequestCard');
+
+    render(
+      <RequestCard
+        request={{
+          ...baseRequest,
+          status: 'awaiting_release',
+          releaseDate: '2026-08-15T00:00:00Z',
+        }}
+      />
+    );
+
+    expect(screen.getByText('Releases Aug 15, 2026')).toBeInTheDocument();
+  });
+
+  it('does not render release text when status is awaiting_release but releaseDate is null', async () => {
+    const { RequestCard } = await import('@/components/requests/RequestCard');
+
+    render(
+      <RequestCard
+        request={{
+          ...baseRequest,
+          status: 'awaiting_release',
+          releaseDate: null,
+        }}
+      />
+    );
+
+    expect(screen.queryByText(/^Releases /)).toBeNull();
+  });
+
+  it('does not render release text when releaseDate is provided but status is not awaiting_release', async () => {
+    const { RequestCard } = await import('@/components/requests/RequestCard');
+
+    render(
+      <RequestCard
+        request={{
+          ...baseRequest,
+          status: 'pending',
+          releaseDate: '2026-08-15T00:00:00Z',
+        }}
+      />
+    );
+
+    expect(screen.queryByText(/^Releases /)).toBeNull();
+  });
 });
