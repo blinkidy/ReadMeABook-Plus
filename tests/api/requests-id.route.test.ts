@@ -4,6 +4,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@/generated/prisma/client';
 import { createPrismaMock } from '../helpers/prisma';
 
 let authRequest: any;
@@ -162,7 +163,7 @@ describe('Request by ID API routes', () => {
     expect(payload.request.status).toBe('cancelled');
     expect(prismaMock.request.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ selectedTorrent: null }),
+        data: expect.objectContaining({ selectedTorrent: Prisma.DbNull }),
       })
     );
     expect(jobQueueMock.addNotificationJob).toHaveBeenCalledWith(

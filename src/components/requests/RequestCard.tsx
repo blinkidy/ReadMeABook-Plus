@@ -13,7 +13,8 @@ import { useCancelRequest } from '@/lib/hooks/useRequests';
 import { cn } from '@/lib/utils/cn';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import { AudiobookDetailsModal } from '@/components/audiobooks/AudiobookDetailsModal';
-import { COMPLETED_STATUSES } from '@/lib/constants/request-statuses';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { COMPLETED_STATUSES, CANCELLABLE_STATUSES } from '@/lib/constants/request-statuses';
 
 interface RequestCardProps {
   request: {
@@ -45,26 +46,25 @@ export function RequestCard({ request, showActions = true }: RequestCardProps) {
   const [showError, setShowError] = React.useState(false);
   const [showDetailsModal, setShowDetailsModal] = React.useState(false);
   const [coverError, setCoverError] = React.useState(false);
+  const [confirmCancelOpen, setConfirmCancelOpen] = React.useState(false);
+
+  const isAwaitingApproval = request.status === 'awaiting_approval';
 
   const requestType = request.type || 'audiobook';
   const isEbook = requestType === 'ebook';
 
   const isCompleted = COMPLETED_STATUSES.includes(request.status as typeof COMPLETED_STATUSES[number]);
-  const canCancel = ['pending', 'searching', 'downloading', 'awaiting_search', 'awaiting_approval'].includes(request.status);
+  const canCancel = (CANCELLABLE_STATUSES as readonly string[]).includes(request.status);
   const isActive = ['searching', 'downloading', 'processing'].includes(request.status);
   const isFailed = request.status === 'failed';
 
-  const handleCancel = async () => {
-    const statusNote = request.status === 'awaiting_approval'
-      ? ' It is pending admin approval and will be withdrawn.'
-      : ' It has already been approved and is actively being processed/monitored.';
-    const message = `Are you sure you want to cancel this request?${statusNote}`;
-    if (window.confirm(message)) {
-      try {
-        await cancelRequest(request.id);
-      } catch (error) {
-        console.error('Failed to cancel request:', error);
-      }
+  const handleConfirmCancel = async () => {
+    try {
+      await cancelRequest(request.id);
+      setConfirmCancelOpen(false);
+    } catch (error) {
+      console.error('Failed to cancel request:', error);
+      setConfirmCancelOpen(false);
     }
   };
 
@@ -232,13 +232,13 @@ export function RequestCard({ request, showActions = true }: RequestCardProps) {
               <div className="flex flex-wrap gap-2">
                 {canCancel && (
                   <Button
-                    onClick={handleCancel}
+                    onClick={() => setConfirmCancelOpen(true)}
                     loading={isLoading}
                     variant="outline"
                     size="sm"
                     className="text-xs sm:text-sm text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                   >
-                    Cancel
+                    {isAwaitingApproval ? 'Withdraw' : 'Cancel'}
                   </Button>
                 )}
               </div>
@@ -258,6 +258,22 @@ export function RequestCard({ request, showActions = true }: RequestCardProps) {
           hideRequestActions
         />
       )}
+
+      <ConfirmModal
+        isOpen={confirmCancelOpen}
+        onClose={() => !isLoading && setConfirmCancelOpen(false)}
+        onConfirm={handleConfirmCancel}
+        title={isAwaitingApproval ? 'Withdraw request' : 'Cancel request'}
+        message={
+          isAwaitingApproval
+            ? 'This request is pending admin approval and will be withdrawn. You can request it again later.'
+            : 'This request has already been approved and is actively being processed. Cancelling will stop the download.'
+        }
+        confirmText={isAwaitingApproval ? 'Withdraw request' : 'Cancel request'}
+        cancelText="Keep request"
+        variant="danger"
+        isLoading={isLoading}
+      />
     </div>
   );
 }

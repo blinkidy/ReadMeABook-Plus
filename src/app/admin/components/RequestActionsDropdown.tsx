@@ -12,6 +12,8 @@ import { createPortal } from 'react-dom';
 import { InteractiveTorrentSearchModal } from '@/components/requests/InteractiveTorrentSearchModal';
 import { AdjustSearchTermsModal } from './AdjustSearchTermsModal';
 import { useSmartDropdownPosition } from '@/hooks/useSmartDropdownPosition';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { CANCELLABLE_STATUSES } from '@/lib/constants/request-statuses';
 
 export interface RequestActionsDropdownProps {
   request: {
@@ -54,7 +56,11 @@ export function RequestActionsDropdown({
   const [showInteractiveSearch, setShowInteractiveSearch] = useState(false);
   const [showInteractiveSearchEbook, setShowInteractiveSearchEbook] = useState(false);
   const [showAdjustSearchTerms, setShowAdjustSearchTerms] = useState(false);
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const { containerRef, dropdownRef, positionAbove, style } = useSmartDropdownPosition(isOpen);
+
+  const isAwaitingApproval = request.status === 'awaiting_approval';
 
   // Determine request type
   const isEbook = request.type === 'ebook';
@@ -66,7 +72,7 @@ export function RequestActionsDropdown({
   const canSearch = ['pending', 'failed', 'awaiting_search'].includes(request.status);
   const canAdjustSearchTerms = ['pending', 'failed', 'awaiting_search', 'searching'].includes(request.status);
   const canRetryDownload = request.status === 'failed' && (request.downloadAttempts ?? 0) > 0 && !!onRetryDownload;
-  const canCancel = ['pending', 'searching', 'downloading', 'awaiting_search', 'awaiting_approval'].includes(request.status);
+  const canCancel = (CANCELLABLE_STATUSES as readonly string[]).includes(request.status);
   const canDelete = true; // Admins can always delete
 
   // View Source: For ebooks, extract MD5 from slow download URL and link to Anna's Archive
@@ -157,18 +163,21 @@ export function RequestActionsDropdown({
     }
   };
 
-  const handleCancel = async () => {
+  const handleCancel = () => {
     setIsOpen(false);
-    const statusNote = request.status === 'awaiting_approval'
-      ? ' It is pending admin approval and will be withdrawn.'
-      : ' It has already been approved and is actively being processed/monitored.';
-    const message = `Are you sure you want to cancel this request?${statusNote}`;
-    if (window.confirm(message)) {
-      try {
-        await onCancel(request.requestId);
-      } catch (error) {
-        console.error('Failed to cancel request:', error);
-      }
+    setConfirmCancelOpen(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    setIsCancelling(true);
+    try {
+      await onCancel(request.requestId);
+      setConfirmCancelOpen(false);
+    } catch (error) {
+      console.error('Failed to cancel request:', error);
+      setConfirmCancelOpen(false);
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -532,6 +541,22 @@ export function RequestActionsDropdown({
         author={request.author}
         currentSearchTerms={request.customSearchTerms}
         onSuccess={onSearchTermsUpdated}
+      />
+
+      <ConfirmModal
+        isOpen={confirmCancelOpen}
+        onClose={() => !isCancelling && setConfirmCancelOpen(false)}
+        onConfirm={handleConfirmCancel}
+        title={isAwaitingApproval ? 'Withdraw request' : 'Cancel request'}
+        message={
+          isAwaitingApproval
+            ? `"${request.title}" is pending admin approval and will be withdrawn. The user can request it again later.`
+            : `"${request.title}" has already been approved and is actively being processed. Cancelling will stop the download.`
+        }
+        confirmText={isAwaitingApproval ? 'Withdraw request' : 'Cancel request'}
+        cancelText="Keep request"
+        variant="danger"
+        isLoading={isCancelling}
       />
     </>
   );

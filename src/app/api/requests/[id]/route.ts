@@ -4,10 +4,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@/generated/prisma/client';
 import { requireAuth, AuthenticatedRequest } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/db';
 import { RMABLogger } from '@/lib/utils/logger';
 import { CLIENT_PROTOCOL_MAP, DownloadClientType } from '@/lib/interfaces/download-client.interface';
+import { CANCELLABLE_STATUSES } from '@/lib/constants/request-statuses';
 
 const logger = RMABLogger.create('API.RequestById');
 
@@ -134,8 +136,7 @@ export async function PATCH(
       }
 
       if (action === 'cancel') {
-        const cancellableStatuses = ['pending', 'searching', 'downloading', 'awaiting_search', 'awaiting_approval'];
-        if (!cancellableStatuses.includes(requestRecord.status)) {
+        if (!(CANCELLABLE_STATUSES as readonly string[]).includes(requestRecord.status)) {
           return NextResponse.json(
             {
               error: 'ValidationError',
@@ -152,7 +153,7 @@ export async function PATCH(
           data: {
             status: 'cancelled',
             updatedAt: new Date(),
-            ...(isAwaitingApproval && { selectedTorrent: null as any }),
+            ...(isAwaitingApproval && { selectedTorrent: Prisma.DbNull }),
           },
           include: {
             audiobook: true,
