@@ -118,6 +118,14 @@ export async function tagAudioFileMetadata(
         args.push('-metadata', `ASIN="${escapeMetadata(metadata.asin)}"`);
       }
 
+      if (metadata.series) {
+        args.push('-metadata', `SERIES="${escapeMetadata(metadata.series)}"`);
+      }
+
+      if (metadata.seriesPart) {
+        args.push('-metadata', `SERIES-PART="${escapeMetadata(metadata.seriesPart)}"`);
+      }
+
       // Explicitly specify output format
       args.push('-f', 'flac');
     }

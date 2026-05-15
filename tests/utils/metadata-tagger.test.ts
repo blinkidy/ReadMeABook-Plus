@@ -114,6 +114,72 @@ describe('metadata tagger', () => {
     await expect(checkFfmpegAvailable()).resolves.toBe(false);
   });
 
+  describe('series metadata', () => {
+    it('writes show/episode_id for m4b when series/seriesPart provided', async () => {
+      fsMock.access.mockResolvedValue(undefined);
+      mockExecSuccess('done');
+
+      await tagAudioFileMetadata('/tmp/book.m4b', {
+        title: 'Book',
+        author: 'Author',
+        series: 'The Mistborn Saga',
+        seriesPart: '1',
+      });
+
+      const command = execMock.mock.calls[0][0] as string;
+      expect(command).toContain('-metadata show="The Mistborn Saga"');
+      expect(command).toContain('-metadata episode_id="1"');
+    });
+
+    it('writes SERIES/SERIES-PART for mp3 when series/seriesPart provided', async () => {
+      fsMock.access.mockResolvedValue(undefined);
+      mockExecSuccess('done');
+
+      await tagAudioFileMetadata('/tmp/book.mp3', {
+        title: 'Book',
+        author: 'Author',
+        series: 'The Mistborn Saga',
+        seriesPart: '1.5',
+      });
+
+      const command = execMock.mock.calls[0][0] as string;
+      expect(command).toContain('-metadata SERIES="The Mistborn Saga"');
+      expect(command).toContain('-metadata SERIES-PART="1.5"');
+    });
+
+    it('writes SERIES/SERIES-PART for flac when series/seriesPart provided', async () => {
+      fsMock.access.mockResolvedValue(undefined);
+      mockExecSuccess('done');
+
+      await tagAudioFileMetadata('/tmp/book.flac', {
+        title: 'Book',
+        author: 'Author',
+        series: 'The Mistborn Saga',
+        seriesPart: '2',
+      });
+
+      const command = execMock.mock.calls[0][0] as string;
+      expect(command).toContain('-metadata SERIES="The Mistborn Saga"');
+      expect(command).toContain('-metadata SERIES-PART="2"');
+    });
+
+    it('omits series tags when fields are absent', async () => {
+      fsMock.access.mockResolvedValue(undefined);
+      mockExecSuccess('done');
+
+      await tagAudioFileMetadata('/tmp/book.m4b', {
+        title: 'Book',
+        author: 'Author',
+      });
+
+      const command = execMock.mock.calls[0][0] as string;
+      expect(command).not.toContain('show=');
+      expect(command).not.toContain('episode_id=');
+      expect(command).not.toContain('SERIES=');
+      expect(command).not.toContain('SERIES-PART=');
+    });
+  });
+
   describe('metadata escaping', () => {
     it('does NOT escape single quotes (they are literal in double-quoted shell strings)', async () => {
       fsMock.access.mockResolvedValue(undefined);
