@@ -71,6 +71,7 @@ describe('RequestActionsDropdown', () => {
 
     fireEvent.click(screen.getByTitle('Actions'));
     fireEvent.click(screen.getByText('Cancel Request'));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
     await waitFor(() => expect(onCancel).toHaveBeenCalledWith('req-1'));
 
     fireEvent.click(screen.getByTitle('Actions'));

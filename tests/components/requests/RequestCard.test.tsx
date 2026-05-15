@@ -103,6 +103,7 @@ describe('RequestCard', () => {
     render(<RequestCard request={baseRequest} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
     await waitFor(() => {
       expect(cancelRequestMock).toHaveBeenCalledWith('req-1');
     });
