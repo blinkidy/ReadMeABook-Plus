@@ -100,6 +100,29 @@ if [ "$READY" = "false" ]; then
     echo "[App] Check server logs above for errors (database connection, port conflict, etc.)"
 else
     # =========================================================================
+    # WAIT FOR REDIS TO FINISH LOADING (internal Redis only)
+    # =========================================================================
+    # Redis returns "LOADING Redis is loading the dataset in memory" while it
+    # replays its AOF/RDB on startup. /api/health only checks Postgres, so it
+    # passes before Redis is actually ready to accept commands. Without this
+    # wait, /api/init kicks off Bull queues that flood the log with LOADING
+    # errors until the retry loop catches up.
+    if [ "$USE_EXTERNAL_REDIS" != "true" ]; then
+        REDIS_READY_TIMEOUT=${REDIS_READY_TIMEOUT:-60}
+        echo "[App] Waiting for Redis to finish loading (timeout: ${REDIS_READY_TIMEOUT}s)..."
+        for i in $(seq 1 "$REDIS_READY_TIMEOUT"); do
+            if redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null | grep -q '^PONG$'; then
+                echo "[App] Redis is ready (took ${i}s)"
+                break
+            fi
+            if [ "$i" -eq "$REDIS_READY_TIMEOUT" ]; then
+                echo "[App] WARNING: Redis did not become ready within ${REDIS_READY_TIMEOUT}s - proceeding anyway"
+            fi
+            sleep 1
+        done
+    fi
+
+    # =========================================================================
     # INITIALIZE APPLICATION SERVICES
     # =========================================================================
     # Creates default scheduled jobs, runs credential migration, etc.

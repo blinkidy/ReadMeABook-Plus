@@ -8,6 +8,7 @@
 - **Admin-generated login token per user (URL-login)** → [backend/services/auth.md](backend/services/auth.md)
 - **Route protection, auth guards** → [frontend/routing-auth.md](frontend/routing-auth.md)
 - **Login page UI/UX** → [frontend/pages/login.md](frontend/pages/login.md)
+- **Credential recovery (lost CONFIG_ENCRYPTION_KEY, locked-out admin)** → [admin-features/credential-recovery.md](admin-features/credential-recovery.md)
 
 ## Configuration & Setup
 - **First-time setup wizard** → [setup-wizard.md](setup-wizard.md)
@@ -143,6 +144,8 @@
 **"What's the database schema?"** → [backend/database.md](backend/database.md)
 **"How does authentication work?"** → [backend/services/auth.md](backend/services/auth.md)
 **"How do I change my password?"** → [backend/services/auth.md](backend/services/auth.md) (local users only - accessed via user menu in header)
+**"Local admin can't log in / 'Invalid username or password' with correct credentials"** → [admin-features/credential-recovery.md](admin-features/credential-recovery.md)
+**"How do I recover from a lost CONFIG_ENCRYPTION_KEY?"** → [admin-features/credential-recovery.md](admin-features/credential-recovery.md)
 **"How do I delete requests?"** → [admin-features/request-deletion.md](admin-features/request-deletion.md)
 **"How do I approve/deny user requests?"** → [admin-features/request-approval.md](admin-features/request-approval.md)
 **"How do I enable auto-approve for requests?"** → [admin-features/request-approval.md](admin-features/request-approval.md)
