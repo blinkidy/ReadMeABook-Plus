@@ -90,6 +90,11 @@ export function EndpointCard({ endpoint, token, useSession }: EndpointCardProps)
                   Admin
                 </span>
               )}
+              {endpoint.isWrite && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                  Write
+                </span>
+              )}
             </div>
             <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
               {endpoint.title}
@@ -99,25 +104,33 @@ export function EndpointCard({ endpoint, token, useSession }: EndpointCardProps)
             </p>
           </div>
 
-          <button
-            onClick={handleTryIt}
-            disabled={loading}
-            className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 transition-all active:scale-[0.97]"
-          >
-            {loading ? (
-              <>
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 dark:border-gray-900/30 border-t-white dark:border-t-gray-900" />
-                Running
-              </>
-            ) : (
-              <>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                </svg>
-                Try it
-              </>
+          <div className="flex-shrink-0 flex flex-col items-end gap-1">
+            <button
+              onClick={handleTryIt}
+              disabled={loading || endpoint.isWrite}
+              title={endpoint.isWrite ? 'Use curl or your API client — write actions disabled here for safety' : undefined}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.97]"
+            >
+              {loading ? (
+                <>
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 dark:border-gray-900/30 border-t-white dark:border-t-gray-900" />
+                  Running
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  </svg>
+                  Try it
+                </>
+              )}
+            </button>
+            {endpoint.isWrite && (
+              <span className="text-[11px] text-gray-500 dark:text-gray-400 max-w-[180px] text-right leading-snug">
+                Use curl or your API client — write actions disabled here for safety.
+              </span>
             )}
-          </button>
+          </div>
         </div>
 
         {/* Expandable response area */}

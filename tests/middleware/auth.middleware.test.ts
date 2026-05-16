@@ -290,16 +290,20 @@ describe('auth middleware', () => {
       expect(payload.message).toMatch(/not available via API token/i);
     });
 
-    it('allows API tokens on all 5 permitted endpoints', async () => {
-      const allowedPaths = [
-        '/api/auth/me',
-        '/api/requests',
-        '/api/admin/metrics',
-        '/api/admin/downloads/active',
-        '/api/admin/requests/recent',
+    it('allows API tokens on every permitted endpoint (incl. dynamic ID match)', async () => {
+      const allowedCalls: Array<[string, string]> = [
+        ['GET', '/api/auth/me'],
+        ['GET', '/api/audiobooks/search'],
+        ['GET', '/api/requests'],
+        ['POST', '/api/requests'],
+        ['GET', '/api/requests/abc-uuid-123'],
+        ['GET', '/api/requests/00000000-0000-0000-0000-000000000000'],
+        ['GET', '/api/admin/metrics'],
+        ['GET', '/api/admin/downloads/active'],
+        ['GET', '/api/admin/requests/recent'],
       ];
 
-      for (const path of allowedPaths) {
+      for (const [method, path] of allowedCalls) {
         vi.clearAllMocks();
         prismaMock.apiToken.findUnique.mockResolvedValue({
           id: 'token-1',
@@ -318,12 +322,49 @@ describe('auth middleware', () => {
 
         const handler = vi.fn(async () => NextResponse.json({ ok: true }));
         const response = await requireAuth(
-          makeRequest(`Bearer ${testToken}`, path, 'GET') as any,
+          makeRequest(`Bearer ${testToken}`, path, method) as any,
           handler
         );
 
-        expect(handler).toHaveBeenCalled();
-        expect(response.status).toBe(200);
+        expect(handler, `${method} ${path}`).toHaveBeenCalled();
+        expect(response.status, `${method} ${path}`).toBe(200);
+      }
+    });
+
+    it('blocks API tokens on sibling sub-routes of /api/requests/:id', async () => {
+      const blockedCalls: Array<[string, string]> = [
+        ['GET', '/api/requests/abc/select-torrent'],
+        ['GET', '/api/requests/abc/download-token'],
+        ['GET', '/api/requests/abc/interactive-search'],
+        ['POST', '/api/requests/abc/manual-search'],
+        ['POST', '/api/requests/abc/select-ebook'],
+      ];
+
+      for (const [method, path] of blockedCalls) {
+        vi.clearAllMocks();
+        prismaMock.apiToken.findUnique.mockResolvedValue({
+          id: 'token-1',
+          tokenHash: testTokenHash,
+          role: 'admin',
+          expiresAt: null,
+          tokenUser: {
+            id: 'user-1',
+            plexUsername: 'activeuser',
+            role: 'admin',
+            deletedAt: null,
+          },
+        });
+        prismaMock.apiToken.update.mockResolvedValue({});
+        const { requireAuth } = await import('@/lib/middleware/auth');
+
+        const handler = vi.fn();
+        const response = await requireAuth(
+          makeRequest(`Bearer ${testToken}`, path, method) as any,
+          handler
+        );
+
+        expect(handler, `${method} ${path} should be blocked`).not.toHaveBeenCalled();
+        expect(response.status, `${method} ${path}`).toBe(403);
       }
     });
 
@@ -365,5 +406,63 @@ describe('auth middleware', () => {
     const payload = getCurrentUser(makeRequest('Bearer token') as any);
     expect(payload?.sub).toBe('user-1');
     expect(isAdmin(payload)).toBe(true);
+  });
+
+  describe('getCurrentUserAsync', () => {
+    it('returns null when no token is present', async () => {
+      const { getCurrentUserAsync } = await import('@/lib/middleware/auth');
+      const payload = await getCurrentUserAsync(makeRequest() as any);
+      expect(payload).toBeNull();
+    });
+
+    it('resolves JWT tokens via verifyAccessToken', async () => {
+      verifyAccessTokenMock.mockReturnValue({
+        sub: 'user-jwt',
+        plexId: 'plex-jwt',
+        username: 'jwtuser',
+        role: 'user',
+        iat: 1,
+        exp: 2,
+      });
+      const { getCurrentUserAsync } = await import('@/lib/middleware/auth');
+
+      const payload = await getCurrentUserAsync(makeRequest('Bearer jwttoken') as any);
+      expect(payload?.sub).toBe('user-jwt');
+      expect(payload?.role).toBe('user');
+    });
+
+    it('resolves API tokens via apiToken lookup', async () => {
+      const apiTok = 'rmab_async_test_1234567890';
+      const apiTokHash = crypto.createHash('sha256').update(apiTok).digest('hex');
+      prismaMock.apiToken.findUnique.mockResolvedValue({
+        id: 'token-async',
+        tokenHash: apiTokHash,
+        role: 'user',
+        expiresAt: null,
+        tokenUser: {
+          id: 'user-api',
+          plexId: 'plex-api',
+          plexUsername: 'apiuser',
+          role: 'user',
+          deletedAt: null,
+        },
+      });
+      prismaMock.apiToken.update.mockResolvedValue({});
+      const { getCurrentUserAsync } = await import('@/lib/middleware/auth');
+
+      const payload = await getCurrentUserAsync(makeRequest(`Bearer ${apiTok}`) as any);
+      expect(payload?.sub).toBe('user-api');
+      expect(payload?.username).toBe('apiuser');
+    });
+
+    it('returns null for invalid API tokens', async () => {
+      prismaMock.apiToken.findUnique.mockResolvedValue(null);
+      const { getCurrentUserAsync } = await import('@/lib/middleware/auth');
+
+      const payload = await getCurrentUserAsync(
+        makeRequest('Bearer rmab_invalid_token_abc') as any
+      );
+      expect(payload).toBeNull();
+    });
   });
 });

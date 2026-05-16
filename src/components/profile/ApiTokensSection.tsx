@@ -27,6 +27,10 @@ export function ApiTokensSection() {
               View API documentation
             </Link>
           </p>
+          <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+            API tokens act with your full user-level permissions, including creating audiobook
+            requests on your behalf. Keep them private.
+          </p>
         </div>
       </div>
 

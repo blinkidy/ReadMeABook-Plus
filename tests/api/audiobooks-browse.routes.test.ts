@@ -36,6 +36,7 @@ vi.mock('@/lib/utils/ignored-audiobooks', () => ({
 
 vi.mock('@/lib/middleware/auth', () => ({
   getCurrentUser: currentUserMock,
+  getCurrentUserAsync: currentUserMock,
 }));
 
 describe('Audiobooks browse routes', () => {

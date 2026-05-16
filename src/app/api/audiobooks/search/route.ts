@@ -8,7 +8,7 @@ import { getAudibleService } from '@/lib/integrations/audible.service';
 import { enrichAudiobooksWithMatches } from '@/lib/utils/audiobook-matcher';
 import { deduplicateAndCollectGroups } from '@/lib/utils/deduplicate-audiobooks';
 import { persistDedupGroups, collapseByExistingWorks } from '@/lib/services/works.service';
-import { getCurrentUser } from '@/lib/middleware/auth';
+import { getCurrentUserAsync } from '@/lib/middleware/auth';
 import { RMABLogger } from '@/lib/utils/logger';
 import { annotateWithIgnoreStatus } from '@/lib/utils/ignored-audiobooks';
 
@@ -37,8 +37,8 @@ export async function GET(request: NextRequest) {
     const audibleService = getAudibleService();
     const results = await audibleService.search(query, page);
 
-    // Get current user (optional - for request status enrichment)
-    const currentUser = getCurrentUser(request);
+    // Get current user (optional — JWT or API token — for request-status enrichment)
+    const currentUser = await getCurrentUserAsync(request);
     const userId = currentUser?.sub || undefined;
 
     // Two-pass dedup: local title/narrator/duration matching first, then collapse

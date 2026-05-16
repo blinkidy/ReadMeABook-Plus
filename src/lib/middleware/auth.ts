@@ -242,11 +242,30 @@ export async function requireAdmin(
 }
 
 /**
- * Helper: Get current user from request (for use in API routes)
+ * Helper: Get current user from request (for use in API routes).
+ * JWT-only — does NOT recognize API tokens. Use `getCurrentUserAsync` if
+ * the caller should also accept `rmab_`-prefixed API tokens.
  */
 export function getCurrentUser(request: NextRequest): TokenPayload | null {
   const token = extractToken(request);
   if (!token) return null;
+  return verifyAccessToken(token);
+}
+
+/**
+ * Helper: Get current user from request, recognizing BOTH JWT sessions and
+ * API tokens (`rmab_` prefix). Returns the same `TokenPayload` shape in both
+ * cases so callers don't need to branch on auth type.
+ *
+ * Use this in routes that are open to optional auth but should still enrich
+ * responses with per-user context when called by an API token holder.
+ */
+export async function getCurrentUserAsync(request: NextRequest): Promise<TokenPayload | null> {
+  const token = extractToken(request);
+  if (!token) return null;
+  if (token.startsWith(API_TOKEN_PREFIX)) {
+    return authenticateApiToken(token);
+  }
   return verifyAccessToken(token);
 }
 

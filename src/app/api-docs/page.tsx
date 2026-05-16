@@ -131,7 +131,9 @@ export default function ApiDocsPage() {
           {/* Footer note */}
           <div className="mt-10 text-center">
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              API tokens are restricted to the endpoints listed above.
+              API tokens are restricted to the endpoints listed above. Endpoints
+              flagged <span className="font-semibold text-amber-600 dark:text-amber-400">Write</span> mutate
+              state on behalf of the token owner — keep your tokens private.
               JWT session authentication has access to all endpoints.
             </p>
           </div>
