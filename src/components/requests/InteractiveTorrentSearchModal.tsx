@@ -12,6 +12,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { TorrentResult, RankedTorrent } from '@/lib/utils/ranking-algorithm';
+import { extractTitleTags } from '@/lib/utils/title-tags';
+import { useIsTruncated } from '@/lib/hooks/useIsTruncated';
 import {
   useInteractiveSearch,
   useSelectTorrent,
@@ -119,6 +121,7 @@ export function InteractiveTorrentSearchModal({
   const [searchTitle, setSearchTitle] = useState(customSearchTerms || audiobook.title);
   const [isCustomConfirming, setIsCustomConfirming] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [expandedGuids, setExpandedGuids] = useState<Set<string>>(() => new Set());
 
   // Stable close handler via ref
   const onCloseRef = useRef(onClose);
@@ -157,6 +160,7 @@ export function InteractiveTorrentSearchModal({
   useEffect(() => {
     setSearchTitle(customSearchTerms || audiobook.title);
     setResults([]);
+    setExpandedGuids(new Set());
   }, [isOpen, audiobook.title, customSearchTerms]);
 
   // Perform search when modal opens
@@ -189,6 +193,7 @@ export function InteractiveTorrentSearchModal({
 
   const performSearch = async () => {
     setResults([]);
+    setExpandedGuids(new Set());
     try {
       let data;
       if (isEbookMode) {
@@ -380,125 +385,24 @@ export function InteractiveTorrentSearchModal({
             {/* Results List */}
             {!isSearching && results.length > 0 && (
               <div className="space-y-0.5">
-                {results.map((result) => {
-                  const score = Math.round(result.score);
-                  const style = getScoreStyle(score);
-                  const isUsenet = result.protocol === 'usenet';
-                  const isAnnasArchive = isEbookMode && result.source === 'annas_archive';
-                  const displayFormat = result.format || result.ebookFormat;
-
-                  return (
-                    <div
-                      key={result.guid}
-                      className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50/80 dark:hover:bg-white/[0.03] transition-colors group"
-                    >
-                      {/* Score Badge */}
-                      <div
-                        className={`flex-shrink-0 w-11 h-11 rounded-xl ${style.bg} flex flex-col items-center justify-center`}
-                        title={`Score: ${score} (Match: ${Math.round(result.breakdown?.matchScore ?? 0)}, Format: ${Math.round(result.breakdown?.formatScore ?? 0)}, Size: ${Math.round(result.breakdown?.sizeScore ?? 0)}, Seeds: ${Math.round(result.breakdown?.seederScore ?? 0)})`}
-                      >
-                        <span className={`text-[15px] font-bold leading-none tabular-nums ${style.text}`}>
-                          {score}
-                        </span>
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        {/* Title Row */}
-                        <div className="flex items-center gap-1.5">
-                          <a
-                            href={result.infoUrl || result.guid}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm font-medium text-gray-900 dark:text-white truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                            title={result.title}
-                          >
-                            {result.title}
-                          </a>
-                        </div>
-
-                        {/* Metadata Row */}
-                        <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
-                          {/* Rank */}
-                          <span className="text-gray-400 dark:text-gray-500 font-medium">#{result.rank}</span>
-                          <span className="text-gray-300 dark:text-gray-600 select-none">&middot;</span>
-
-                          {/* Indexer / Source */}
-                          {isAnnasArchive ? (
-                            <span className="text-orange-600 dark:text-orange-400 font-medium">Anna&apos;s Archive</span>
-                          ) : (
-                            <span>{result.indexer}</span>
-                          )}
-
-                          {/* Size */}
-                          {result.size > 0 && (
-                            <>
-                              <span className="text-gray-300 dark:text-gray-600 select-none">&middot;</span>
-                              <span>{formatSize(result.size)}</span>
-                            </>
-                          )}
-
-                          {/* Format */}
-                          {displayFormat && (
-                            <>
-                              <span className="text-gray-300 dark:text-gray-600 select-none">&middot;</span>
-                              <span className="px-1 py-px text-[10px] font-semibold uppercase tracking-wide rounded bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300">
-                                {displayFormat}
-                              </span>
-                            </>
-                          )}
-
-                          {/* Protocol (torrent vs usenet) - only show for non-Anna's Archive */}
-                          {!isAnnasArchive && (
-                            <>
-                              <span className="text-gray-300 dark:text-gray-600 select-none">&middot;</span>
-                              {isUsenet ? (
-                                <span className="flex items-center gap-0.5 text-sky-600 dark:text-sky-400">
-                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                                  </svg>
-                                  NZB
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-0.5">
-                                  <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                                  </svg>
-                                  <span className="text-emerald-600 dark:text-emerald-400">{result.seeders ?? 0}</span>
-                                </span>
-                              )}
-                            </>
-                          )}
-
-                          {/* Age */}
-                          {result.publishDate && (
-                            <>
-                              <span className="text-gray-300 dark:text-gray-600 select-none">&middot;</span>
-                              <span>{formatAge(result.publishDate)}</span>
-                            </>
-                          )}
-
-                          {/* Bonus Points */}
-                          {result.bonusPoints > 0 && (
-                            <>
-                              <span className="text-gray-300 dark:text-gray-600 select-none">&middot;</span>
-                              <span className="text-blue-600 dark:text-blue-400 font-medium">+{Math.round(result.bonusPoints)}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Action Button */}
-                      <button
-                        onClick={() => handleDownloadClick(result)}
-                        disabled={isDownloading}
-                        className="flex-shrink-0 px-4 py-1.5 text-[13px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 dark:bg-blue-400/10 dark:hover:bg-blue-400/20 rounded-full transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
-                      >
-                        Get
-                      </button>
-                    </div>
-                  );
-                })}
+                {results.map((result) => (
+                  <ResultRow
+                    key={result.guid}
+                    result={result}
+                    isEbookMode={isEbookMode}
+                    isExpanded={expandedGuids.has(result.guid)}
+                    isDownloading={isDownloading}
+                    onToggleExpand={() => {
+                      setExpandedGuids((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(result.guid)) next.delete(result.guid);
+                        else next.add(result.guid);
+                        return next;
+                      });
+                    }}
+                    onDownload={() => handleDownloadClick(result)}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -614,4 +518,176 @@ export function InteractiveTorrentSearchModal({
   );
 
   return createPortal(modalContent, document.body);
+}
+
+interface ResultRowProps {
+  result: RankedTorrent & { qualityScore?: number; source?: string; ebookFormat?: string };
+  isEbookMode: boolean;
+  isExpanded: boolean;
+  isDownloading: boolean;
+  onToggleExpand: () => void;
+  onDownload: () => void;
+}
+
+function ResultRow({
+  result,
+  isEbookMode,
+  isExpanded,
+  isDownloading,
+  onToggleExpand,
+  onDownload,
+}: ResultRowProps) {
+  const score = Math.round(result.score);
+  const style = getScoreStyle(score);
+  const isUsenet = result.protocol === 'usenet';
+  const isAnnasArchive = isEbookMode && result.source === 'annas_archive';
+  const displayFormat = result.format || result.ebookFormat;
+  const { tags } = extractTitleTags(result.title);
+  const displayFormatLower = (displayFormat ?? '').toLowerCase();
+  const chipTags = tags.filter((t) => t.toLowerCase() !== displayFormatLower);
+
+  const titleRef = useRef<HTMLAnchorElement | null>(null);
+  const isTruncated = useIsTruncated(titleRef);
+  // Why: keep chevron rendered while expanded so users can collapse — once
+  // expanded, scrollWidth no longer exceeds clientWidth and isTruncated flips false.
+  const showChevron = isTruncated || isExpanded;
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50/80 dark:hover:bg-white/[0.03] transition-colors group">
+      {/* Score Badge */}
+      <div
+        className={`flex-shrink-0 w-11 h-11 rounded-xl ${style.bg} flex flex-col items-center justify-center`}
+        title={`Score: ${score} (Match: ${Math.round(result.breakdown?.matchScore ?? 0)}, Format: ${Math.round(result.breakdown?.formatScore ?? 0)}, Size: ${Math.round(result.breakdown?.sizeScore ?? 0)}, Seeds: ${Math.round(result.breakdown?.seederScore ?? 0)})`}
+      >
+        <span className={`text-[15px] font-bold leading-none tabular-nums ${style.text}`}>
+          {score}
+        </span>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        {/* Title Row */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <a
+            ref={titleRef}
+            href={result.infoUrl || result.guid}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`text-sm font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-1 min-w-0 ${isExpanded ? 'break-words whitespace-normal' : 'truncate'}`}
+            title={result.title}
+            aria-label={result.title}
+          >
+            {result.title}
+          </a>
+          {showChevron && (
+            <button
+              type="button"
+              onClick={onToggleExpand}
+              aria-expanded={isExpanded}
+              aria-label={isExpanded ? 'Hide full title' : 'Show full title'}
+              className="flex-shrink-0 p-2 -my-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100/70 dark:text-gray-500 dark:hover:text-gray-300 dark:hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
+            >
+              <svg
+                className={`w-3 h-3 transition-transform duration-200 ease-out ${isExpanded ? 'rotate-90' : ''}`}
+                fill="currentColor"
+                viewBox="0 0 20 20"
+                aria-hidden="true"
+              >
+                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Metadata Row */}
+        <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
+          {/* Rank */}
+          <span className="text-gray-400 dark:text-gray-500 font-medium">#{result.rank}</span>
+          <span className="text-gray-300 dark:text-gray-600 select-none">&middot;</span>
+
+          {/* Indexer / Source */}
+          {isAnnasArchive ? (
+            <span className="text-orange-600 dark:text-orange-400 font-medium">Anna&apos;s Archive</span>
+          ) : (
+            <span>{result.indexer}</span>
+          )}
+
+          {/* Size */}
+          {result.size > 0 && (
+            <>
+              <span className="text-gray-300 dark:text-gray-600 select-none">&middot;</span>
+              <span>{formatSize(result.size)}</span>
+            </>
+          )}
+
+          {/* Format */}
+          {displayFormat && (
+            <>
+              <span className="text-gray-300 dark:text-gray-600 select-none">&middot;</span>
+              <span className="px-1 py-px text-[10px] font-semibold uppercase tracking-wide rounded bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300">
+                {displayFormat}
+              </span>
+            </>
+          )}
+
+          {/* Title tag chips (language/edition/etc.) */}
+          {chipTags.map((tag) => (
+            <span
+              key={tag}
+              className="px-1 py-px text-[10px] font-semibold uppercase tracking-wide rounded bg-slate-100 dark:bg-slate-500/15 text-slate-700 dark:text-slate-300"
+            >
+              {tag}
+            </span>
+          ))}
+
+          {/* Protocol (torrent vs usenet) - only show for non-Anna's Archive */}
+          {!isAnnasArchive && (
+            <>
+              <span className="text-gray-300 dark:text-gray-600 select-none">&middot;</span>
+              {isUsenet ? (
+                <span className="flex items-center gap-0.5 text-sky-600 dark:text-sky-400">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                  </svg>
+                  NZB
+                </span>
+              ) : (
+                <span className="flex items-center gap-0.5">
+                  <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-emerald-600 dark:text-emerald-400">{result.seeders ?? 0}</span>
+                </span>
+              )}
+            </>
+          )}
+
+          {/* Age */}
+          {result.publishDate && (
+            <>
+              <span className="text-gray-300 dark:text-gray-600 select-none">&middot;</span>
+              <span>{formatAge(result.publishDate)}</span>
+            </>
+          )}
+
+          {/* Bonus Points */}
+          {result.bonusPoints > 0 && (
+            <>
+              <span className="text-gray-300 dark:text-gray-600 select-none">&middot;</span>
+              <span className="text-blue-600 dark:text-blue-400 font-medium">+{Math.round(result.bonusPoints)}</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Action Button */}
+      <button
+        onClick={onDownload}
+        disabled={isDownloading}
+        className="flex-shrink-0 px-4 py-1.5 text-[13px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 dark:bg-blue-400/10 dark:hover:bg-blue-400/20 rounded-full transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+      >
+        Get
+      </button>
+    </div>
+  );
 }
