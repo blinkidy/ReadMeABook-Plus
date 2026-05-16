@@ -109,10 +109,15 @@ interface AudiobookDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRequestSuccess?: () => void;
+  onStatusChange?: (newStatus: string) => void;
+  onIgnoreChange?: (isIgnored: boolean) => void;
   isRequested?: boolean;
   requestStatus?: string | null;
   isAvailable?: boolean;
   requestedByUsername?: string | null;
+  hideRequestActions?: boolean; // Hides sticky action bar for read-only contexts (BookDate, ShelvesSection)
+  hasReportedIssue?: boolean;
+  aiReason?: string | null;
   adminActions?: React.ReactNode; // Optional admin buttons (Approve/Search/Deny) rendered as second row in action bar
 }
 

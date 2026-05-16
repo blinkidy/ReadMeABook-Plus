@@ -273,7 +273,6 @@ export function RequestCard({ request, showActions = true }: RequestCardProps) {
           onClose={() => setShowDetailsModal(false)}
           requestStatus={request.status}
           isAvailable={COMPLETED_STATUSES.includes(request.status as typeof COMPLETED_STATUSES[number])}
-          hideRequestActions
         />
       )}
 

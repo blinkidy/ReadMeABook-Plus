@@ -10,9 +10,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const cancelRequestMock = vi.hoisted(() => vi.fn());
+const detailsModalSpy = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/hooks/useRequests', () => ({
   useCancelRequest: () => ({ cancelRequest: cancelRequestMock, isLoading: false }),
+}));
+
+vi.mock('@/components/audiobooks/AudiobookDetailsModal', () => ({
+  AudiobookDetailsModal: (props: any) => {
+    detailsModalSpy(props);
+    return <div data-testid="audiobook-details-modal" data-open={String(props.isOpen)} />;
+  },
 }));
 
 vi.mock('next/image', () => ({
@@ -52,6 +60,7 @@ const baseRequest = {
 describe('RequestCard', () => {
   beforeEach(() => {
     cancelRequestMock.mockReset();
+    detailsModalSpy.mockReset();
   });
 
   afterEach(() => {
@@ -217,5 +226,26 @@ describe('RequestCard', () => {
     );
 
     expect(screen.queryByText(/^Releases /)).toBeNull();
+  });
+
+  it('opens AudiobookDetailsModal without hiding request actions when details are viewed', async () => {
+    const { RequestCard } = await import('@/components/requests/RequestCard');
+
+    render(
+      <RequestCard
+        request={{
+          ...baseRequest,
+          audiobook: { ...baseRequest.audiobook, audibleAsin: 'ASIN123' },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: baseRequest.audiobook.title }));
+
+    expect(detailsModalSpy).toHaveBeenCalled();
+    const props = detailsModalSpy.mock.calls.at(-1)?.[0];
+    expect(props.isOpen).toBe(true);
+    expect(props.asin).toBe('ASIN123');
+    expect(props.hideRequestActions).toBeUndefined();
   });
 });

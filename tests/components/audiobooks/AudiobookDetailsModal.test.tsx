@@ -305,4 +305,26 @@ describe('AudiobookDetailsModal', () => {
 
     expect(screen.queryByText('Request failed')).toBeNull();
   });
+
+  it('renders sticky footer with status pill and admin icons when opened from a pending request', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'admin-1', username: 'admin', role: 'admin' } });
+    const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
+
+    render(
+      <AudiobookDetailsModal
+        asin="ASIN123"
+        isOpen={true}
+        onClose={vi.fn()}
+        requestStatus="pending"
+        isAvailable={false}
+      />
+    );
+
+    await act(async () => {});
+
+    const statusPill = screen.getByRole('button', { name: 'Requested' });
+    expect(statusPill).toBeDisabled();
+    expect(screen.getByTitle('Interactive Search')).toBeInTheDocument();
+    expect(screen.getByTitle('Manual Import')).toBeInTheDocument();
+  });
 });
