@@ -43,7 +43,7 @@ describe('AdminJobsPage', () => {
         {
           id: 'job-1',
           name: 'Library Scan',
-          type: 'scan_plex',
+          type: 'plex_library_scan',
           schedule: '0 * * * *',
           enabled: true,
           lastRun: null,
@@ -56,6 +56,11 @@ describe('AdminJobsPage', () => {
     render(<AdminJobsPage />);
 
     expect((await screen.findAllByText('Library Scan'))[0]).toBeInTheDocument();
+    expect(
+      (await screen.findAllByText('Scans your full media library to detect newly added audiobooks.'))[0]
+    ).toBeInTheDocument();
+    expect(screen.queryByText('plex_library_scan')).not.toBeInTheDocument();
+    expect(screen.queryByText('About Scheduled Jobs')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: /Trigger Now/i })[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Trigger Job' }));

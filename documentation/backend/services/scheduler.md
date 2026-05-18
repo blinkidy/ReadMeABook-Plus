@@ -12,6 +12,7 @@ Manages recurring/scheduled jobs providing automated tasks (Plex scans, Audible 
 - Schedule editing UI with toast notifications
 - Human-friendly schedule descriptions and editor (preset/custom/advanced modes)
 - Real-time cron expression preview
+- Admin Jobs page shows per-job descriptions inline; startup auto-renames legacy "Plex *" job names to neutral defaults (type-gated, exact-literal match only)
 
 ## Scheduled Jobs
 

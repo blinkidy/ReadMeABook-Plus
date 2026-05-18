@@ -28,6 +28,22 @@ interface ScheduledJob {
   nextRun: string | null;
 }
 
+// Plain-English subtitle shown under each job's name on /admin/jobs.
+// Keyed by ScheduledJobType. Unknown types render no subtitle (silent absence —
+// we never leak raw type keys like `plex_library_scan` into the UI).
+const JOB_DESCRIPTIONS: Record<string, string> = {
+  plex_library_scan: 'Scans your full media library to detect newly added audiobooks.',
+  plex_recently_added_check: 'Checks for the newest items added to your library since the last scan.',
+  audible_refresh: 'Refreshes popular & new-release audiobooks from Audible.',
+  retry_missing_torrents: 'Retries searches for requests that previously found no results.',
+  retry_failed_imports: 'Re-attempts import for downloads that failed to organize.',
+  find_missing_ebooks: 'Looks for ebook companions to audiobooks you already have.',
+  cleanup_seeded_torrents: "Removes torrents once they've met your seeding requirements.",
+  monitor_rss_feeds: 'Watches indexer RSS feeds for matches against pending requests.',
+  sync_reading_shelves: 'Pulls new books from your Goodreads/Hardcover shelves.',
+  check_watched_lists: 'Checks watched series & authors for new releases.',
+};
+
 function AdminJobsPageContent() {
   const [jobs, setJobs] = useState<ScheduledJob[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,7 +230,7 @@ function AdminJobsPageContent() {
                     {job.name}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    {job.type}
+                    {JOB_DESCRIPTIONS[job.type] ?? ''}
                   </div>
                 </div>
                 <span
@@ -322,7 +338,7 @@ function AdminJobsPageContent() {
                       {job.name}
                     </div>
                     <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {job.type}
+                      {JOB_DESCRIPTIONS[job.type] ?? ''}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -393,19 +409,6 @@ function AdminJobsPageContent() {
               <p className="text-gray-500 dark:text-gray-400">No scheduled jobs found</p>
             </div>
           )}
-        </div>
-
-        {/* Info Box */}
-        <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
-            About Scheduled Jobs
-          </h3>
-          <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-            <li>• <strong>Library Scan:</strong> Automatically scans your media library for new audiobooks</li>
-            <li>• <strong>Audible Data Refresh:</strong> Caches popular and new release audiobooks from Audible</li>
-            <li>• Trigger jobs manually using the &quot;Trigger Now&quot; button</li>
-            <li>• Schedule format follows cron syntax (minute hour day month weekday)</li>
-          </ul>
         </div>
 
         {/* Confirmation Dialog */}

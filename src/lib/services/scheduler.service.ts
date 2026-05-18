@@ -10,6 +10,18 @@ import { RMABLogger } from '../utils/logger';
 
 const logger = RMABLogger.create('Scheduler');
 
+// Legacy literal `name` values that older installs may still have in the DB.
+// Each entry maps an exact stale literal to its current neutral default,
+// type-gated so partial-matches to the word "Plex" can never be touched.
+const STALE_NAME_REWRITES: ReadonlyArray<{
+  type: string;
+  staleName: string;
+  neutralName: string;
+}> = [
+  { type: 'plex_library_scan', staleName: 'Plex Library Scan', neutralName: 'Library Scan' },
+  { type: 'plex_recently_added_check', staleName: 'Plex Recently Added Check', neutralName: 'Recently Added Check' },
+];
+
 export type ScheduledJobType = 'plex_library_scan' | 'plex_recently_added_check' | 'audible_refresh' | 'retry_missing_torrents' | 'retry_failed_imports' | 'find_missing_ebooks' | 'cleanup_seeded_torrents' | 'monitor_rss_feeds' | 'sync_reading_shelves' | 'check_watched_lists';
 
 export interface ScheduledJob {
@@ -61,6 +73,9 @@ export class SchedulerService {
 
     // Clean up deprecated scheduled jobs
     await this.cleanupDeprecatedJobs();
+
+    // Rewrite legacy literal names (e.g. "Plex Library Scan") to current neutral defaults
+    await this.renameStaleJobNames();
 
     // Create default jobs if they don't exist
     await this.ensureDefaultJobs();
@@ -181,6 +196,29 @@ export class SchedulerService {
       logger.warn(`Default jobs: ${created} created, ${failed} failed — failed jobs will be retried on next restart`);
     } else if (created > 0) {
       logger.info(`Default jobs: ${created} created`);
+    }
+  }
+
+  /**
+   * Rewrite legacy literal `name` values to their current neutral defaults.
+   * Type-gated on BOTH `name` and `type` exact-equals — admin-customized names
+   * that happen to contain "Plex" are never touched.
+   */
+  private async renameStaleJobNames(): Promise<void> {
+    try {
+      for (const entry of STALE_NAME_REWRITES) {
+        const result = await prisma.scheduledJob.updateMany({
+          where: { name: entry.staleName, type: entry.type },
+          data: { name: entry.neutralName },
+        });
+        if (result.count > 0) {
+          logger.info(`Renamed scheduled job: "${entry.staleName}" → "${entry.neutralName}" (${result.count} row${result.count === 1 ? '' : 's'})`);
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to rename stale scheduled job names', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

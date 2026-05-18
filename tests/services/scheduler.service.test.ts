@@ -504,4 +504,45 @@ describe('SchedulerService', () => {
 
     await expect(service.triggerJobNow('job-10')).rejects.toThrow('Audiobookshelf is not configured');
   });
+
+  it('rewrites stale literal job names with type-gated updateMany on startup', async () => {
+    prismaMock.scheduledJob.findFirst.mockResolvedValue({ id: 'existing' });
+    prismaMock.scheduledJob.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.scheduledJob.findMany
+      .mockResolvedValueOnce([]) // cleanupDeprecatedJobs
+      .mockResolvedValueOnce([]) // scheduleAllJobs
+      .mockResolvedValue([]); // triggerOverdueJobs
+
+    const { SchedulerService } = await import('@/lib/services/scheduler.service');
+    const service = new SchedulerService();
+    await service.start();
+
+    const updateManyCalls = prismaMock.scheduledJob.updateMany.mock.calls;
+    expect(updateManyCalls).toHaveLength(2);
+
+    // Type-gating safety: each WHERE must match BOTH name AND type exact-equals.
+    expect(updateManyCalls[0][0]).toEqual({
+      where: { name: 'Plex Library Scan', type: 'plex_library_scan' },
+      data: { name: 'Library Scan' },
+    });
+    expect(updateManyCalls[1][0]).toEqual({
+      where: { name: 'Plex Recently Added Check', type: 'plex_recently_added_check' },
+      data: { name: 'Recently Added Check' },
+    });
+  });
+
+  it('swallows rename errors and continues startup (idempotent)', async () => {
+    prismaMock.scheduledJob.findFirst.mockResolvedValue({ id: 'existing' });
+    prismaMock.scheduledJob.updateMany.mockRejectedValue(new Error('db blip'));
+    prismaMock.scheduledJob.findMany
+      .mockResolvedValueOnce([]) // cleanupDeprecatedJobs
+      .mockResolvedValueOnce([]) // scheduleAllJobs
+      .mockResolvedValue([]); // triggerOverdueJobs
+
+    const { SchedulerService } = await import('@/lib/services/scheduler.service');
+    const service = new SchedulerService();
+
+    // Must not throw — rename failure is non-fatal.
+    await expect(service.start()).resolves.toBeUndefined();
+  });
 });
