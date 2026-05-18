@@ -677,7 +677,7 @@ export class AudibleService {
         {
           params: { region: audnexusRegion },
           timeout: 10000,
-          headers: { 'User-Agent': 'ReadMeABook/1.0' },
+          headers: { 'User-Agent': RMAB_USER_AGENT },
         },
       );
 
@@ -768,7 +768,7 @@ export class AudibleService {
         {
           params: { region: audnexusRegion },
           timeout: 5000,
-          headers: { 'User-Agent': 'ReadMeABook/1.0' },
+          headers: { 'User-Agent': RMAB_USER_AGENT },
         },
       );
 
