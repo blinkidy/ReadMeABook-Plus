@@ -71,8 +71,12 @@ src/components/
 - Floating pagination pill at bottom center of viewport
 - Minimal design: section label | ← | Page X of Y | →
 - Quick jump input (type page number + Enter)
-- Auto-shows when scrolling through a section (IntersectionObserver)
-- Auto-scrolls to section top on page change
+- Free-scroll tracking via IntersectionObserver (reports dominant section to parent)
+- Controlled `activeIndex` lives on the home page; pill is observer-aware but parent-decided
+- **Lock-to-section on Prev/Next/jump:** pill stays anchored to the paged section until the user generates a scroll input (`wheel`, `touchstart`, `ArrowUp/Down`, `PageUp/Down`, `Home`, `End`) or clicks another section's dot. 30s safety auto-release.
+- **Fit-aware scroll:** if the section already fits below the sticky header, paging swaps cards in place (no scroll). Otherwise snaps the section top under the header with breathing room (8px top, 24px bottom). Target Y is clamped to `[0, maxScrollY]` so paging can never scroll the section out of the viewport.
+- Dot click on a different section always scrolls (intentional navigation) and releases any active lock.
+- Visibility: pill is shown anywhere on homepage main content; hidden only when the footer enters view. Stays visible over the CTA card gap between the last section and the footer.
 - Rounded-full design with backdrop blur and subtle shadow
 - Responsive grid layouts (1/2/3/4 cols)
 - Enhanced CTA section with gradient background (blue-to-indigo)
@@ -167,6 +171,13 @@ interface StickyPaginationProps {
   onPageChange: (page: number) => void;
   sectionRef: React.RefObject<HTMLElement | null>;
   label: string;
+}
+
+interface UnifiedPaginationProps {
+  sections: PaginationSection[];
+  footerRef?: React.RefObject<HTMLElement | null>;
+  activeIndex: number;                              // controlled by parent
+  onDominantSectionChange: (idx: number) => void;   // observer guess; parent decides
 }
 ```
 

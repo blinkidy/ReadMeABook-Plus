@@ -66,6 +66,8 @@ vi.mock('@/components/ui/UnifiedPagination', () => ({
       label: string;
       onPageChange: (page: number) => void;
     }>;
+    activeIndex: number;
+    onDominantSectionChange: (idx: number) => void;
   }) => (
     <div>
       {sections.map((s) => (

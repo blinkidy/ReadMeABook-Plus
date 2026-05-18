@@ -29,6 +29,11 @@ export interface PaginationSection {
 interface UnifiedPaginationProps {
   sections: PaginationSection[];
   footerRef?: React.RefObject<HTMLElement | null>;
+  /** Controlled: which section's controls the pill displays. */
+  activeIndex: number;
+  /** Reports the observer's "dominant section" guess to the parent.
+   *  The parent decides whether to honor it (e.g., ignores it while locked). */
+  onDominantSectionChange: (index: number) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -217,14 +222,21 @@ function SectionDots({ sections, activeIndex }: SectionDotsProps) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function UnifiedPagination({ sections, footerRef }: UnifiedPaginationProps) {
-  const [activeIndex, setActiveIndex] = useState(0);
+export function UnifiedPagination({
+  sections,
+  footerRef,
+  activeIndex,
+  onDominantSectionChange,
+}: UnifiedPaginationProps) {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [footerVisible, setFooterVisible] = useState(false);
   const ratiosRef = useRef<number[]>(sections.map(() => 0));
-  const [anySectionVisible, setAnySectionVisible] = useState(false);
 
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onDominantRef = useRef(onDominantSectionChange);
+  useEffect(() => {
+    onDominantRef.current = onDominantSectionChange;
+  }, [onDominantSectionChange]);
 
   // Keep ratios array length in sync with sections
   useEffect(() => {
@@ -232,13 +244,31 @@ export function UnifiedPagination({ sections, footerRef }: UnifiedPaginationProp
   }, [sections.length]);
 
   const activeSectionHasPages = sections[activeIndex]?.totalPages > 1;
-  const shouldShow = anySectionVisible && !footerVisible && activeSectionHasPages && sections.length > 0;
+  // Pill is visible anywhere on the homepage main content. Only the footer
+  // explicitly retreats it. Don't gate on a section being intersected — that
+  // hides the pill in the CTA-card gap between last section and footer.
+  const shouldShow = !footerVisible && activeSectionHasPages && sections.length > 0;
+
+  // Cross-fade whenever the controlled activeIndex changes (observer-driven via the
+  // parent OR a lock-driven explicit set). Skip on initial mount.
+  const prevActiveIndexRef = useRef(activeIndex);
+  useEffect(() => {
+    if (prevActiveIndexRef.current === activeIndex) return;
+    prevActiveIndexRef.current = activeIndex;
+    setIsTransitioning(true);
+    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+    transitionTimerRef.current = setTimeout(() => setIsTransitioning(false), 320);
+    return () => {
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+    };
+  }, [activeIndex]);
 
   // ------------------------------------------------------------------
   // Intersection observers for all sections
   // ------------------------------------------------------------------
   useEffect(() => {
     const observers: IntersectionObserver[] = [];
+    let lastReportedDominant = -1;
 
     sections.forEach((section, idx) => {
       if (!section.sectionRef.current) return;
@@ -246,8 +276,6 @@ export function UnifiedPagination({ sections, footerRef }: UnifiedPaginationProp
       const observer = new IntersectionObserver(
         ([entry]) => {
           ratiosRef.current[idx] = entry.intersectionRatio;
-          const anyVisible = ratiosRef.current.some((r) => r > 0.05);
-          setAnySectionVisible(anyVisible);
 
           // Find dominant section
           let maxRatio = -1;
@@ -259,15 +287,11 @@ export function UnifiedPagination({ sections, footerRef }: UnifiedPaginationProp
             }
           }
 
-          setActiveIndex((current) => {
-            if (current !== dominant) {
-              setIsTransitioning(true);
-              if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-              transitionTimerRef.current = setTimeout(() => setIsTransitioning(false), 320);
-              return dominant;
-            }
-            return current;
-          });
+          // Report to parent. Parent decides whether to honor it (lock-aware).
+          if (dominant !== lastReportedDominant) {
+            lastReportedDominant = dominant;
+            onDominantRef.current(dominant);
+          }
         },
         {
           threshold: Array.from({ length: 21 }, (_, i) => i / 20),
@@ -281,7 +305,6 @@ export function UnifiedPagination({ sections, footerRef }: UnifiedPaginationProp
 
     return () => {
       observers.forEach((o) => o.disconnect());
-      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
     };
     // Re-run when section refs change
     // eslint-disable-next-line react-hooks/exhaustive-deps

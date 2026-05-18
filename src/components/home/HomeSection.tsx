@@ -89,7 +89,6 @@ interface HomeSectionProps {
   categoryName: string | null;
   colorIndex: number;
   page: number;
-  onPageChange: (page: number) => void;
   sectionRef: React.RefObject<HTMLElement | null>;
   cardSize: number;
   squareCovers: boolean;
@@ -226,7 +225,6 @@ export function HomeSection({
   categoryName,
   colorIndex,
   page,
-  onPageChange,
   sectionRef,
   cardSize,
   squareCovers,

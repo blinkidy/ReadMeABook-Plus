@@ -14,11 +14,31 @@ import { HomeSectionConfigModal } from '@/components/home/HomeSectionConfigModal
 import { useHomeSections } from '@/lib/hooks/useHomeSections';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import { Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { decideScrollForPageChange } from '@/lib/utils/paginationScroll';
+
+const FALLBACK_HEADER_HEIGHT = 64;
+const LOCK_SAFETY_RELEASE_MS = 30_000;
+const RELEASE_SCROLL_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'PageUp',
+  'PageDown',
+  'Home',
+  'End',
+]);
 
 function getSectionTitle(sectionType: string, categoryName?: string | null): string {
   if (sectionType === 'popular') return 'Popular Audiobooks';
   if (sectionType === 'new_releases') return 'New Releases';
   return categoryName || 'Category';
+}
+
+function measureHeaderHeight(): number {
+  if (typeof document === 'undefined') return FALLBACK_HEADER_HEIGHT;
+  const header = document.querySelector<HTMLElement>('header.sticky');
+  if (!header) return FALLBACK_HEADER_HEIGHT;
+  const h = header.getBoundingClientRect().height;
+  return h > 0 ? h : FALLBACK_HEADER_HEIGHT;
 }
 
 export default function HomePage() {
@@ -29,6 +49,12 @@ export default function HomePage() {
   const [pages, setPages] = useState<Record<string, number>>({});
   const [totalPagesMap, setTotalPagesMap] = useState<Record<string, number>>({});
   const [configOpen, setConfigOpen] = useState(false);
+
+  // Controlled paginator-pill state
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [lockedTo, setLockedTo] = useState<number | null>(null);
+  const lockedToRef = useRef<number | null>(null);
+  lockedToRef.current = lockedTo;
 
   const footerRef = useRef<HTMLElement>(null);
 
@@ -52,6 +78,38 @@ export default function HomePage() {
     setTotalPagesMap({});
   }, [hideAvailable]);
 
+  // Clamp activeIndex if the section list shrinks
+  useEffect(() => {
+    if (sections.length === 0) return;
+    if (activeIndex >= sections.length) {
+      setActiveIndex(0);
+      setLockedTo(null);
+    }
+  }, [sections.length, activeIndex]);
+
+  // Release the lock on the user's next intentional scroll input.
+  // wheel / touchstart always release; keydown releases only for known page-scroll keys.
+  useEffect(() => {
+    if (lockedTo === null) return;
+
+    const release = () => setLockedTo(null);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (RELEASE_SCROLL_KEYS.has(e.key)) release();
+    };
+
+    window.addEventListener('wheel', release, { passive: true });
+    window.addEventListener('touchstart', release, { passive: true });
+    window.addEventListener('keydown', onKeyDown);
+    const safetyTimer = window.setTimeout(release, LOCK_SAFETY_RELEASE_MS);
+
+    return () => {
+      window.removeEventListener('wheel', release);
+      window.removeEventListener('touchstart', release);
+      window.removeEventListener('keydown', onKeyDown);
+      window.clearTimeout(safetyTimer);
+    };
+  }, [lockedTo]);
+
   const getPage = (key: string) => pages[key] || 1;
   const setPage = useCallback((key: string, page: number) => {
     setPages((prev) => ({ ...prev, [key]: page }));
@@ -63,6 +121,68 @@ export default function HomePage() {
     });
   }, []);
 
+  // Pill-driven Prev/Next/jump. Fit-aware scroll, lock pill to this section.
+  const handlePageChange = useCallback(
+    (index: number, key: string, page: number, ref: React.RefObject<HTMLElement | null>) => {
+      setPage(key, page);
+      setActiveIndex(index);
+      setLockedTo(index);
+
+      const section = ref.current;
+      if (!section || typeof window === 'undefined') return;
+
+      const rect = section.getBoundingClientRect();
+      const headerHeight = measureHeaderHeight();
+      const maxScrollY = Math.max(
+        0,
+        document.documentElement.scrollHeight - window.innerHeight
+      );
+
+      const decision = decideScrollForPageChange({
+        sectionTop: rect.top,
+        sectionHeight: rect.height,
+        viewportHeight: window.innerHeight,
+        headerHeight,
+        scrollY: window.scrollY,
+        maxScrollY,
+      });
+
+      if (decision.action === 'scroll') {
+        window.scrollTo({ top: decision.targetY, behavior: 'smooth' });
+      }
+    },
+    [setPage]
+  );
+
+  // Dot click on a non-active section. Always scrolls (intentional navigation).
+  // Releases any active lock and immediately switches the pill to that section.
+  const handleScrollToSection = useCallback(
+    (index: number, ref: React.RefObject<HTMLElement | null>) => {
+      setLockedTo(null);
+      setActiveIndex(index);
+
+      const section = ref.current;
+      if (!section || typeof window === 'undefined') return;
+
+      const rect = section.getBoundingClientRect();
+      const headerHeight = measureHeaderHeight();
+      const maxScrollY = Math.max(
+        0,
+        document.documentElement.scrollHeight - window.innerHeight
+      );
+      const desired = rect.top + window.scrollY - headerHeight - 8;
+      const targetY = Math.min(Math.max(0, desired), maxScrollY);
+      window.scrollTo({ top: targetY, behavior: 'smooth' });
+    },
+    []
+  );
+
+  // Observer-driven "dominant section" guess from the pill. Honored only when unlocked.
+  const handleDominantSectionChange = useCallback((index: number) => {
+    if (lockedToRef.current !== null) return;
+    setActiveIndex(index);
+  }, []);
+
   // Build pagination sections for the floating pill
   const paginationSections: PaginationSection[] = sections.map((s, i) => {
     const key = getSectionKey(s);
@@ -72,13 +192,9 @@ export default function HomePage() {
       accentColor: SECTION_DOT_COLORS[i % SECTION_DOT_COLORS.length],
       currentPage: getPage(key),
       totalPages: totalPagesMap[key] || 1,
-      onPageChange: (page: number) => {
-        setPage(key, page);
-        ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      },
+      onPageChange: (page: number) => handlePageChange(i, key, page, ref),
       sectionRef: ref,
-      onScrollToSection: () =>
-        ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      onScrollToSection: () => handleScrollToSection(i, ref),
     };
   });
 
@@ -125,10 +241,6 @@ export default function HomePage() {
                   categoryName={section.categoryName}
                   colorIndex={index}
                   page={getPage(key)}
-                  onPageChange={(page) => {
-                    setPage(key, page);
-                    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }}
                   sectionRef={ref}
                   cardSize={cardSize}
                   squareCovers={squareCovers}
@@ -174,6 +286,8 @@ export default function HomePage() {
           <UnifiedPagination
             footerRef={footerRef}
             sections={paginationSections}
+            activeIndex={Math.min(activeIndex, paginationSections.length - 1)}
+            onDominantSectionChange={handleDominantSectionChange}
           />
         )}
 

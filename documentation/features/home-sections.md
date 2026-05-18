@@ -42,7 +42,7 @@ Users customize their home page by adding/removing/reordering sections. Each sec
 - **Config Modal:** `src/components/home/HomeSectionConfigModal.tsx` — drag-and-drop (desktop), up/down arrows (mobile), auto-save with debounce
 - **Section Component:** `src/components/home/HomeSection.tsx` — renders individual section with color-coded header
 - **Home Page:** `src/app/page.tsx` — dynamic sections from user config, gear icon for customize
-- **Pagination:** `src/components/ui/UnifiedPagination.tsx` — updated to support 1-12 dynamic sections
+- **Pagination:** `src/components/ui/UnifiedPagination.tsx` — controlled by `HomePage` for `activeIndex`; observer reports dominant section but parent gates updates via `lockedTo` state. Lock set on Prev/Next/jump; released on user scroll input (`wheel` / `touchstart` / Arrow / Page / Home / End keys) or any dot click. Fit-aware scroll via `src/lib/utils/paginationScroll.ts` — no scroll when section fits viewport, otherwise snaps top under sticky header with clamps that structurally prevent scrolling the section out of view. Pill is shown anywhere on main content; only the footer hides it.
 
 ## Key Decisions
 - 10 section limit per user (total)
