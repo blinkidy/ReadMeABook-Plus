@@ -84,11 +84,25 @@
   - `documentation/deployment/docker.md`
 - Generalized some UI wording from audiobook-only to book/request language where appropriate.
 
+## Workflow Automation Added
+- `.github/workflows/pre-release-checks.yml`
+  - Runs on PRs to `main`, pushes to `main`, pushes to `codex/**`, and manual dispatch.
+  - Calls reusable `Backend Tests` workflow with Discord notifications disabled.
+  - Builds the unified Docker image with `push: false`.
+  - Stops before publishing/release.
+- `.github/workflows/build-unified-image.yml`
+  - Remains the manual/tag release workflow that publishes to GHCR.
+
 ## Tests Added Or Updated
 - `tests/services/request-creator-ignore.test.ts`
   - Mocked `addSearchEbookJob`.
   - Added coverage for first-class EPUB requests.
   - Asserts EPUB request type, pending status, ebook search job dispatch, and no audiobook search job.
+- Existing tests were updated for first-class EPUB defaults:
+  - Notification tests expect `sourceUrl` plus request type args.
+  - Audiobook card/modal tests expect `Request Audiobook` and `Audiobook request created!`.
+  - Login/requests wording expects broader book language.
+  - Setup path tests treat invalid templates as failed path validation.
 
 ## Verification State From Implementation Session
 - `git diff --check` passed with only LF/CRLF warnings.

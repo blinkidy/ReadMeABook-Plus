@@ -69,14 +69,14 @@ describe('AudiobookCard', () => {
 
     render(<AudiobookCard audiobook={baseAudiobook} onRequestSuccess={onRequestSuccess} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Request' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Request Audiobook' }));
 
     const requestPromise = createRequestMock.mock.results[0]?.value;
     await act(async () => {
       await requestPromise;
     });
 
-    expect(createRequestMock).toHaveBeenCalledWith(baseAudiobook);
+    expect(createRequestMock).toHaveBeenCalledWith(baseAudiobook, { mediaType: 'audiobook' });
     expect(onRequestSuccess).toHaveBeenCalled();
 
     expect(screen.getByText(/Request created!/)).toBeInTheDocument();
@@ -149,7 +149,7 @@ describe('AudiobookCard', () => {
     );
 
     // Denied status allows re-requesting, so Request button is shown
-    expect(screen.getByRole('button', { name: 'Request' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Request Audiobook' })).toBeInTheDocument();
   });
 
   it('shows an error when a request fails', async () => {
@@ -160,7 +160,7 @@ describe('AudiobookCard', () => {
 
     render(<AudiobookCard audiobook={baseAudiobook} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Request' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Request Audiobook' }));
 
     const requestPromise = createRequestMock.mock.results[0]?.value;
     await act(async () => {

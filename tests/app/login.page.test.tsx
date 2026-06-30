@@ -70,7 +70,7 @@ describe('LoginPage', () => {
 
     expect(
       await screen.findByText(
-        "Request audiobooks and they'll automatically download and appear in your Audiobookshelf library"
+        "Request books and they'll automatically download into the right destination"
       )
     ).toBeInTheDocument();
   });

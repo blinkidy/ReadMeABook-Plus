@@ -127,7 +127,7 @@ describe('AudiobookDetailsModal', () => {
     });
 
     expect(onRequestSuccess).toHaveBeenCalled();
-    expect(screen.getByText(/Request created!/)).toBeInTheDocument();
+    expect(screen.getByText(/Audiobook request created!/)).toBeInTheDocument();
 
     await act(async () => {
       vi.advanceTimersByTime(2000);
