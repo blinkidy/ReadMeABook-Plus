@@ -40,8 +40,14 @@ function normalizeBookKey(value: string): string {
     .replace(/\s+/g, ' ');
 }
 
+function normalizeAuthorKey(value: string): string {
+  const primaryAuthor = value.split(/[,;]/)[0] || value;
+  return normalizeBookKey(primaryAuthor);
+}
+
 function isUnknownAuthor(value: string): boolean {
-  return !value || normalizeBookKey(value) === 'unknown author' || normalizeBookKey(value) === 'unknown';
+  const authorKey = normalizeAuthorKey(value);
+  return !authorKey || authorKey === 'unknown author' || authorKey === 'unknown';
 }
 
 /**
@@ -195,7 +201,7 @@ export async function findBookOrbitMatch(
   if (!audiobook.title || !audiobook.author) return null;
 
   const titleKey = normalizeBookKey(audiobook.title);
-  const authorKey = normalizeBookKey(audiobook.author);
+  const authorKey = normalizeAuthorKey(audiobook.author);
   if (!titleKey || !authorKey) return null;
 
   const candidates = await prisma.plexLibrary.findMany({
@@ -217,7 +223,7 @@ export async function findBookOrbitMatch(
   ));
 
   const authorMatch = titleMatches.find((candidate) => (
-    normalizeBookKey(candidate.author) === authorKey
+    normalizeAuthorKey(candidate.author) === authorKey
   ));
   if (authorMatch) return authorMatch;
 

@@ -105,6 +105,30 @@ describe('audiobook-matcher', () => {
     expect(match?.plexGuid).toBe('bookorbit://abc123');
   });
 
+  it('matches BookOrbit author against request authors that include translator metadata', async () => {
+    prismaMock.plexLibrary.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          plexGuid: 'bookorbit://yesteryear',
+          plexRatingKey: null,
+          title: 'Yesteryear',
+          author: 'Caro Claire Burke',
+          asin: null,
+          isbn: null,
+        },
+      ]);
+
+    const { findPlexMatch } = await import('@/lib/utils/audiobook-matcher');
+    const match = await findPlexMatch({
+      asin: 'B0G446KTPG',
+      title: 'Yesteryear',
+      author: 'Caro Claire Burke, Dietlind Falk - Übersetzer, Lisa Kögeböhn - Übersetzer',
+    });
+
+    expect(match?.plexGuid).toBe('bookorbit://yesteryear');
+  });
+
   it('matches a unique BookOrbit ebook by cleaned title when library author is unknown', async () => {
     prismaMock.plexLibrary.findMany
       .mockResolvedValueOnce([])

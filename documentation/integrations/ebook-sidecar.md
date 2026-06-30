@@ -83,7 +83,8 @@ Scheduled `bookorbit_library_scan` job (every 6 hours, enabled by default):
 - Root path: `ebook_bookorbit_library_path` → `BOOKORBIT_LIBRARY_PATH` → `ebook_bookorbit_ingest_path` → `BOOKORBIT_INGEST_PATH` → `media_dir` → `MEDIA_DIR`
 - Use the library path for finished BookOrbit books; use the ingest path only for RMAB's EPUB drop destination.
 - Reads ebook files only: `.epub`, `.pdf`, `.mobi`, `.azw`, `.azw3`, `.fb2`, `.cbz`, `.cbr`
-- Parses BookOrbit defaults like `Author/Series/01. Title (Year)/01. Title (Year).epub` and file-as-book variants
+- Parses BookOrbit defaults like `Books/Author/Series/01. Title (Year)/01. Title (Year).epub` and file-as-book variants
+- Ignores top-level collection folders (`Books`, `Ebooks`) and strips leading series indexes/trailing years from titles
 - Upserts rows in `plex_library` with deterministic `bookorbit://{sha1(filePath)}` IDs
 - Uses ASIN from path/filename when present; otherwise normalized title/author matching against `AudibleCache`
 - Marks matching first-class ebook requests `available` by ASIN, normalized title+author, or normalized title when BookOrbit author is unknown

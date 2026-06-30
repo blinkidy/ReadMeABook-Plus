@@ -39,17 +39,23 @@ function normalizeBookKey(value: string): string {
     .replace(/\s+/g, ' ');
 }
 
+function normalizeAuthorKey(value: string): string {
+  const primaryAuthor = value.split(/[,;]/)[0] || value;
+  return normalizeBookKey(primaryAuthor);
+}
+
 function isUnknownAuthor(value: string): boolean {
-  return !value || normalizeBookKey(value) === 'unknown author' || normalizeBookKey(value) === 'unknown';
+  const authorKey = normalizeAuthorKey(value);
+  return !authorKey || authorKey === 'unknown author' || authorKey === 'unknown';
 }
 
 function extractAsin(value: string): string | undefined {
-  return value.match(/\bB[A-Z0-9]{9}\b/i)?.[0]?.toUpperCase();
+  return value.match(/\bB0[A-Z0-9]{8}\b/i)?.[0]?.toUpperCase();
 }
 
 function stripAsin(value: string): string {
   return value
-    .replace(/\bB[A-Z0-9]{9}\b/ig, '')
+    .replace(/\bB0[A-Z0-9]{8}\b/ig, '')
     .replace(/\s+\(\s*\)/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -117,11 +123,15 @@ async function discoverEbook(rootPath: string, filePath: string): Promise<Discov
   const segments = relative.split(path.sep).filter(Boolean);
   const filename = path.basename(filePath, path.extname(filePath));
   const parent = segments.length > 1 ? segments[segments.length - 2] : filename;
-  const titleSource = segments.length >= 4 ? parent : filename;
+  const parentTitle = cleanBookOrbitTitle(parent);
+  const filenameTitle = cleanBookOrbitTitle(filename);
+  const titleSource = parentTitle && parentTitle === filenameTitle ? parent : filename;
+  const firstSegmentKey = normalizeBookKey(segments[0] || '');
+  const authorIndex = firstSegmentKey === 'books' || firstSegmentKey === 'ebooks' ? 1 : 0;
 
   const asin = extractAsin(relative);
   let title = cleanBookOrbitTitle(titleSource);
-  let author = segments.length > 1 ? cleanName(segments[0]) : '';
+  let author = segments.length > authorIndex + 1 ? cleanName(segments[authorIndex]) : '';
 
   const filenameParts = cleanName(filename).split(/\s+-\s+/);
   if ((!author || author.toLowerCase() === 'unknown') && filenameParts.length >= 2) {
@@ -176,7 +186,7 @@ async function findMatchingEbookRequestIds(book: DiscoveredEbook): Promise<strin
   }
 
   const bookTitleKey = normalizeBookKey(book.title);
-  const bookAuthorKey = normalizeBookKey(book.author);
+  const bookAuthorKey = normalizeAuthorKey(book.author);
   if (!bookTitleKey) return [];
 
   const candidates = await prisma.request.findMany({
@@ -201,7 +211,7 @@ async function findMatchingEbookRequestIds(book: DiscoveredEbook): Promise<strin
       const requestTitleKey = normalizeBookKey(request.audiobook.title);
       if (requestTitleKey !== bookTitleKey) return false;
 
-      const requestAuthorKey = normalizeBookKey(request.audiobook.author);
+      const requestAuthorKey = normalizeAuthorKey(request.audiobook.author);
       return (
         isUnknownAuthor(book.author) ||
         isUnknownAuthor(request.audiobook.author) ||
