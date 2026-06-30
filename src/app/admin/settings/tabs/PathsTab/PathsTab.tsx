@@ -143,7 +143,7 @@ export function PathsTab({ paths, onChange, onValidationChange }: PathsTabProps)
       {/* Media Directory */}
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Media Directory
+          Audiobook Media Directory
         </label>
         <Input
           type="text"
@@ -154,6 +154,23 @@ export function PathsTab({ paths, onChange, onValidationChange }: PathsTabProps)
         />
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Final location for organized audiobook library (Your backend scans this directory)
+        </p>
+      </div>
+
+      {/* BookOrbit Ingest Directory */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          EPUB Destination Path
+        </label>
+        <Input
+          type="text"
+          value={paths.bookOrbitIngestPath || ''}
+          onChange={(e) => updatePath('bookOrbitIngestPath', e.target.value)}
+          placeholder="/path/to/bookorbit/ingest"
+          className="font-mono"
+        />
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Final location for EPUB requests. Leave blank to fall back to the audiobook media directory.
         </p>
       </div>
 
@@ -223,7 +240,7 @@ export function PathsTab({ paths, onChange, onValidationChange }: PathsTabProps)
           </Button>
         </div>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Customize how ebooks are organized within the media directory
+          Customize how ebooks are organized within the EPUB destination path
         </p>
 
         {/* Ebook Validation Error */}
@@ -245,7 +262,7 @@ export function PathsTab({ paths, onChange, onValidationChange }: PathsTabProps)
             <div className="space-y-1.5 text-sm font-mono text-gray-700 dark:text-gray-300">
               {ebookPreview.previewPaths.map((preview, index) => (
                 <div key={index} className="text-xs">
-                  {paths.mediaDir || '/media/audiobooks'}/{preview}
+                  {paths.bookOrbitIngestPath || paths.mediaDir || '/media/audiobooks'}/{preview}
                 </div>
               ))}
             </div>

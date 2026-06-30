@@ -62,18 +62,22 @@ export async function POST(
           return NextResponse.json({ error: 'Request not found' }, { status: 404 });
         }
 
-        // If this is an ebook request, find the parent audiobook request
+        // If this is an ebook request, prefer its parent when present (sidecar flow).
+        // First-class EPUB requests have no parent and can be selected directly.
         let parentRequest;
+        let isFirstClassEbookRequest = false;
         if (foundRequest.type === 'ebook') {
-          if (!foundRequest.parentRequestId) {
-            return NextResponse.json({ error: 'Ebook request has no parent audiobook request' }, { status: 400 });
-          }
-          parentRequest = await prisma.request.findUnique({
-            where: { id: foundRequest.parentRequestId },
-            include: { audiobook: true },
-          });
-          if (!parentRequest) {
-            return NextResponse.json({ error: 'Parent audiobook request not found' }, { status: 404 });
+          if (foundRequest.parentRequestId) {
+            parentRequest = await prisma.request.findUnique({
+              where: { id: foundRequest.parentRequestId },
+              include: { audiobook: true },
+            });
+            if (!parentRequest) {
+              return NextResponse.json({ error: 'Parent audiobook request not found' }, { status: 404 });
+            }
+          } else {
+            parentRequest = foundRequest;
+            isFirstClassEbookRequest = true;
           }
         } else if (foundRequest.type === 'audiobook') {
           parentRequest = foundRequest;
@@ -81,7 +85,7 @@ export async function POST(
           return NextResponse.json({ error: 'Can only select ebooks for audiobook requests' }, { status: 400 });
         }
 
-        if (!['downloaded', 'available'].includes(parentRequest.status)) {
+        if (!isFirstClassEbookRequest && !['downloaded', 'available'].includes(parentRequest.status)) {
           return NextResponse.json(
             { error: `Cannot select ebook for request in ${parentRequest.status} status` },
             { status: 400 }
@@ -127,7 +131,7 @@ export async function POST(
               userId: parentRequest.userId,
               audiobookId: parentRequest.audiobookId,
               type: 'ebook',
-              parentRequestId: parentRequest.id,
+              parentRequestId: parentRequest.type === 'audiobook' ? parentRequest.id : null,
               status: 'searching',
               progress: 0,
               customSearchTerms: parentRequest.customSearchTerms,

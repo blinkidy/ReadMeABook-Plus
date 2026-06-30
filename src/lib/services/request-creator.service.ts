@@ -31,6 +31,8 @@ export interface CreateRequestOptions {
   skipAutoSearch?: boolean;
   /** When true, skip the per-user ignore list check (used for manual requests) */
   bypassIgnore?: boolean;
+  /** Request media type. EPUB maps to the existing first-class ebook request pipeline. */
+  mediaType?: 'audiobook' | 'epub';
 }
 
 export type CreateRequestResult =
@@ -46,54 +48,57 @@ export async function createRequestForUser(
   audiobook: CreateRequestInput,
   options: CreateRequestOptions = {}
 ): Promise<CreateRequestResult> {
-  const { skipAutoSearch = false, bypassIgnore = false } = options;
+  const { skipAutoSearch = false, bypassIgnore = false, mediaType = 'audiobook' } = options;
+  const requestType = mediaType === 'epub' ? 'ebook' : 'audiobook';
 
-  // Check for existing active request (downloaded/available) for this ASIN
-  const existingActiveRequest = await prisma.request.findFirst({
-    where: {
-      audiobook: { audibleAsin: audiobook.asin },
-      type: 'audiobook',
-      status: { in: ['downloaded', 'available'] },
-      deletedAt: null,
-    },
-  });
+  if (requestType === 'audiobook') {
+    // Check for existing active request (downloaded/available) for this ASIN
+    const existingActiveRequest = await prisma.request.findFirst({
+      where: {
+        audiobook: { audibleAsin: audiobook.asin },
+        type: 'audiobook',
+        status: { in: ['downloaded', 'available'] },
+        deletedAt: null,
+      },
+    });
 
-  if (existingActiveRequest) {
-    const status = existingActiveRequest.status;
-    return {
-      success: false,
-      reason: status === 'available' ? 'already_available' : 'being_processed',
-      message: status === 'available'
-        ? 'This audiobook is already available in your library'
-        : 'This audiobook is being processed and will be available soon',
-    };
-  }
-
-  // Check if audiobook is already in Plex/ABS library
-  const plexMatch = await findPlexMatch({
-    asin: audiobook.asin,
-    title: audiobook.title,
-    author: audiobook.author,
-    narrator: audiobook.narrator,
-  });
-
-  if (plexMatch) {
-    return {
-      success: false,
-      reason: 'already_available',
-      message: 'This audiobook is already available in your library',
-    };
-  }
-
-  // Check per-user ignore list (skipped for manual requests via bypassIgnore)
-  if (!bypassIgnore) {
-    const isIgnored = await checkIgnoreList(userId, audiobook.asin);
-    if (isIgnored) {
+    if (existingActiveRequest) {
+      const status = existingActiveRequest.status;
       return {
         success: false,
-        reason: 'ignored',
-        message: 'This audiobook is on your ignore list',
+        reason: status === 'available' ? 'already_available' : 'being_processed',
+        message: status === 'available'
+          ? 'This audiobook is already available in your library'
+          : 'This audiobook is being processed and will be available soon',
       };
+    }
+
+    // Check if audiobook is already in Plex/ABS library
+    const plexMatch = await findPlexMatch({
+      asin: audiobook.asin,
+      title: audiobook.title,
+      author: audiobook.author,
+      narrator: audiobook.narrator,
+    });
+
+    if (plexMatch) {
+      return {
+        success: false,
+        reason: 'already_available',
+        message: 'This audiobook is already available in your library',
+      };
+    }
+
+    // Check per-user ignore list (skipped for manual requests via bypassIgnore)
+    if (!bypassIgnore) {
+      const isIgnored = await checkIgnoreList(userId, audiobook.asin);
+      if (isIgnored) {
+        return {
+          success: false,
+          reason: 'ignored',
+          message: 'This audiobook is on your ignore list',
+        };
+      }
     }
   }
 
@@ -183,7 +188,7 @@ export async function createRequestForUser(
     where: {
       userId,
       audiobookId: audiobookRecord.id,
-      type: 'audiobook',
+      type: requestType,
       deletedAt: null,
     },
   });
@@ -194,7 +199,9 @@ export async function createRequestForUser(
       return {
         success: false,
         reason: 'duplicate',
-        message: 'You have already requested this audiobook',
+        message: requestType === 'ebook'
+          ? 'You have already requested this EPUB'
+          : 'You have already requested this audiobook',
       };
     }
     // Delete existing failed/warn/cancelled request
@@ -206,7 +213,7 @@ export async function createRequestForUser(
   const anyActiveRequest = await prisma.request.findFirst({
     where: {
       audiobookId: audiobookRecord.id,
-      type: 'audiobook',
+      type: requestType,
       status: { notIn: ['failed', 'warn', 'cancelled', 'available', 'downloaded'] },
       deletedAt: null,
     },
@@ -216,7 +223,9 @@ export async function createRequestForUser(
     return {
       success: false,
       reason: 'being_processed',
-      message: 'This audiobook is already being requested by another user',
+      message: requestType === 'ebook'
+        ? 'This EPUB is already being requested by another user'
+        : 'This audiobook is already being requested by another user',
     };
   }
 
@@ -251,7 +260,7 @@ export async function createRequestForUser(
 
   // Evaluate release-date gate (skip-unreleased-auto-search)
   let releaseGateSkip = false;
-  if (!needsApproval && !skipAutoSearch) {
+  if (requestType === 'audiobook' && !needsApproval && !skipAutoSearch) {
     try {
       const configService = getConfigService();
       const skipUnreleasedSetting = (await configService.get('indexer.skip_unreleased')) !== 'false';
@@ -281,7 +290,7 @@ export async function createRequestForUser(
       userId,
       audiobookId: audiobookRecord.id,
       status: initialStatus,
-      type: 'audiobook',
+      type: requestType,
       progress: 0,
       releaseDate,
     },
@@ -304,24 +313,35 @@ export async function createRequestForUser(
 
   // Send notification
   const notificationType = initialStatus === 'awaiting_approval' ? 'request_pending_approval' : 'request_approved';
+  const notificationTitle = requestType === 'ebook'
+    ? `${audiobookRecord.title} (EPUB)`
+    : audiobookRecord.title;
   await jobQueue.addNotificationJob(
     notificationType,
     newRequest.id,
-    audiobookRecord.title,
+    notificationTitle,
     audiobookRecord.author,
-    user.plexUsername || 'Unknown User'
+    user.plexUsername || 'Unknown User',
+    undefined,
+    requestType
   ).catch((error) => {
     logger.error('Failed to queue notification', { error: error instanceof Error ? error.message : String(error) });
   });
 
   // Trigger search job
   if (shouldTriggerSearch) {
-    await jobQueue.addSearchJob(newRequest.id, {
+    const searchPayload = {
       id: audiobookRecord.id,
       title: audiobookRecord.title,
       author: audiobookRecord.author,
       asin: audiobookRecord.audibleAsin || undefined,
-    });
+    };
+
+    if (requestType === 'ebook') {
+      await jobQueue.addSearchEbookJob(newRequest.id, searchPayload, 'epub');
+    } else {
+      await jobQueue.addSearchJob(newRequest.id, searchPayload);
+    }
   }
 
   return { success: true, request: newRequest };

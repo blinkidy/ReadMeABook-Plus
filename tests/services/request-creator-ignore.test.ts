@@ -42,10 +42,12 @@ vi.mock('@/lib/integrations/audible.service', () => ({
 
 // Mock job queue (shared across tests so we can assert addSearchJob calls)
 const jobQueueAddSearchJob = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const jobQueueAddSearchEbookJob = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const jobQueueAddNotificationJob = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@/lib/services/job-queue.service', () => ({
   getJobQueueService: () => ({
     addSearchJob: jobQueueAddSearchJob,
+    addSearchEbookJob: jobQueueAddSearchEbookJob,
     addNotificationJob: jobQueueAddNotificationJob,
   }),
 }));
@@ -79,6 +81,7 @@ describe('createRequestForUser — ignore list', () => {
 
     // Restore mock return values cleared by clearAllMocks
     jobQueueAddSearchJob.mockResolvedValue(undefined);
+    jobQueueAddSearchEbookJob.mockResolvedValue(undefined);
     jobQueueAddNotificationJob.mockResolvedValue(undefined);
 
     // Default: no existing requests, no library matches
@@ -191,6 +194,44 @@ describe('createRequestForUser — ignore list', () => {
     expect(prismaMock.request.create).toHaveBeenCalled();
   });
 
+  it('creates first-class EPUB requests without blocking on audiobook library availability', async () => {
+    const { findPlexMatch } = await import('@/lib/utils/audiobook-matcher');
+    vi.mocked(findPlexMatch).mockResolvedValueOnce({
+      plexGuid: 'plex://existing-audiobook',
+      plexTitle: 'Test Book',
+      plexAuthor: 'Test Author',
+      confidence: 100,
+      matchType: 'asin_exact_field',
+    } as any);
+
+    const { createRequestForUser } = await import('@/lib/services/request-creator.service');
+    const result = await createRequestForUser(TEST_USER_ID, TEST_AUDIOBOOK, {
+      mediaType: 'epub',
+      bypassIgnore: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(prismaMock.request.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'ebook',
+          status: 'pending',
+        }),
+      })
+    );
+    expect(jobQueueAddSearchJob).not.toHaveBeenCalled();
+    expect(jobQueueAddSearchEbookJob).toHaveBeenCalledWith(
+      'request-1',
+      expect.objectContaining({
+        id: 'audiobook-1',
+        title: TEST_AUDIOBOOK.title,
+        author: TEST_AUDIOBOOK.author,
+        asin: TEST_AUDIOBOOK.asin,
+      }),
+      'epub'
+    );
+  });
+
   it('falls through gracefully when works expansion fails', async () => {
     prismaMock.ignoredAudiobook.findUnique.mockResolvedValue(null);
     mockGetSiblingAsins.mockRejectedValue(new Error('DB error'));
@@ -220,6 +261,7 @@ describe('createRequestForUser — release-date gate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     jobQueueAddSearchJob.mockResolvedValue(undefined);
+    jobQueueAddSearchEbookJob.mockResolvedValue(undefined);
     jobQueueAddNotificationJob.mockResolvedValue(undefined);
     prismaMock.request.findFirst.mockResolvedValue(null);
     prismaMock.audiobook.findFirst.mockResolvedValue(null);

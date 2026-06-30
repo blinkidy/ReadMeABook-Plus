@@ -130,6 +130,7 @@ export async function GET(request: NextRequest) {
       paths: {
         downloadDir: configMap.get('download_dir') || '/downloads',
         mediaDir: configMap.get('media_dir') || '/media/audiobooks',
+        bookOrbitIngestPath: configMap.get('ebook_bookorbit_ingest_path') || process.env.BOOKORBIT_INGEST_PATH || '',
         audiobookPathTemplate: configMap.get('audiobook_path_template') || '{author}/{title} {asin}',
         ebookPathTemplate: configMap.get('ebook_path_template') || configMap.get('audiobook_path_template') || '{author}/{title} {asin}',
         metadataTaggingEnabled: configMap.get('metadata_tagging_enabled') === 'true',

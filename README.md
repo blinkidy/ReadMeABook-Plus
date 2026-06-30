@@ -2,7 +2,7 @@
 
 ![RMAB_hero.png](screenshots/RMAB_hero.png)
 
-### Audiobook automation for Plex and Audiobookshelf
+### Book request automation for Plex, Audiobookshelf, and EPUB ingest
 
 <div align="center">
 
@@ -16,7 +16,7 @@
   [![Discord](https://img.shields.io/discord/1450562177277755464?style=for-the-badge&logo=discord&logoColor=white&label=Discord)](https://discord.gg/kaw6jKbKts)
 </div>
 
-*Radarr/Sonarr + Overseerr for audiobooks, all in one*
+*Radarr/Sonarr + Overseerr for book requests, all in one*
 
 [Features](#features) • [Setup](#setup) • [Screenshots](#screenshots) • [Discord](#community)
 
@@ -26,13 +26,13 @@
 
 ## What is this?
 
-You run Plex or Audiobookshelf with audiobooks. You want more audiobooks. You search indexers, download torrents or NZBs, organize files, wait for your server to scan. ReadMeABook does all of that automatically.
+You run Plex or Audiobookshelf with audiobooks, and maybe BookOrbit for ebooks. You want more books. You search indexers, download torrents or NZBs, organize files, wait for your server to scan or ingest. ReadMeABook does all of that automatically.
 
-Request a book → Prowlarr searches → qBittorrent or SABnzbd downloads → Files organized → Library imports. Done.
+Request an audiobook or EPUB → Prowlarr searches → qBittorrent or SABnzbd downloads → Files organized → Library imports or BookOrbit ingests. Done.
 
 Also includes BookDate: AI recommendations with a Tinder-style swipe interface. Swipe right to request.
 
-User friendly audible-backed searches, multi-file chapter merging, e-book sidecar support, OIDC OAuth, admin approval workflows, and more.
+User friendly Audible-backed searches, multi-file chapter merging, first-class EPUB requests, optional e-book sidecar support, OIDC OAuth, admin approval workflows, and more.
 
 ## Features
 
@@ -42,7 +42,8 @@ User friendly audible-backed searches, multi-file chapter merging, e-book sideca
 - **Prowlarr** for indexer search (torrents + NZBs)
 - **BookDate**: AI recommendations (OpenAI/Claude/Local) with swipe interface
 - **Chapter merging**: Multi-file downloads → single M4B with chapters
-- **E-book sidecar**: Optional EPUB/PDF downloads from Shadow Library
+- **EPUB requests**: First-class ebook requests with an independent BookOrbit ingest destination
+- **E-book sidecar**: Optional companion EPUB/PDF downloads
 - **Request approval**: Admin approval workflow for multi-user setups
 - **Setup wizard**: Step-by-step guided config with connection testing
 
@@ -79,17 +80,21 @@ services:
       - ./cache:/app/cache
       - ./downloads:/downloads        # Your download client's path
       - ./media:/media                # Your audiobook library
+      - ./bookorbit-ingest:/bookorbit/ingest  # Your BookOrbit ingest folder
       - ./pgdata:/var/lib/postgresql/data
       - ./redis:/var/lib/redis
     environment:
       PUID: 1000                      # Optional: your user ID
       PGID: 1000                      # Optional: your group ID
+      BOOKORBIT_INGEST_PATH: "/bookorbit/ingest"  # EPUB destination
       PUBLIC_URL: "https://audiobooks.example.com"  # Required for OAuth
 ```
 
 Then run `docker compose up -d` to start.
 
 **Important:** Your download client (qBittorrent/SABnzbd) and RMAB must see files at the same path. See the [Volume Mapping Guide](documentation/deployment/volume-mapping.md) if downloads aren't being detected.
+
+EPUB requests use `BOOKORBIT_INGEST_PATH` or the EPUB Destination Path in Settings. Leave it unset to fall back to the audiobook media directory.
 
 ## Screenshots
 

@@ -57,7 +57,7 @@ export default function SearchPage() {
         {/* Search Header */}
         <div className="text-center space-y-4">
           <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">
-            Search Audiobooks
+          Search Books
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             Find and request any audiobook from Audible

@@ -33,7 +33,7 @@ export const SECTION_DOT_COLORS = [
 ];
 
 function getSectionTitle(sectionType: string, categoryName?: string | null): string {
-  if (sectionType === 'popular') return 'Popular Audiobooks';
+  if (sectionType === 'popular') return 'Popular Books';
   if (sectionType === 'new_releases') return 'New Releases';
   return categoryName || 'Category';
 }

@@ -15,7 +15,7 @@ export async function PUT(request: NextRequest) {
   return requireAuth(request, async (req: AuthenticatedRequest) => {
     return requireAdmin(req, async () => {
       try {
-        const { downloadDir, mediaDir, audiobookPathTemplate, ebookPathTemplate, metadataTaggingEnabled, chapterMergingEnabled, plexFormatCoercionEnabled, fileRenameEnabled, fileRenameTemplate, fileChmod, dirChmod } = await request.json();
+        const { downloadDir, mediaDir, bookOrbitIngestPath, audiobookPathTemplate, ebookPathTemplate, metadataTaggingEnabled, chapterMergingEnabled, plexFormatCoercionEnabled, fileRenameEnabled, fileRenameTemplate, fileChmod, dirChmod } = await request.json();
 
         if (!downloadDir || !mediaDir) {
           return NextResponse.json(
@@ -59,6 +59,19 @@ export async function PUT(request: NextRequest) {
           update: { value: mediaDir },
           create: { key: 'media_dir', value: mediaDir },
         });
+
+        if (bookOrbitIngestPath !== undefined) {
+          await prisma.configuration.upsert({
+            where: { key: 'ebook_bookorbit_ingest_path' },
+            update: { value: bookOrbitIngestPath },
+            create: {
+              key: 'ebook_bookorbit_ingest_path',
+              value: bookOrbitIngestPath,
+              category: 'ebook',
+              description: 'Independent BookOrbit ingest destination for EPUB requests',
+            },
+          });
+        }
 
         // Update audiobook path template
         if (audiobookPathTemplate !== undefined) {
@@ -185,6 +198,7 @@ export async function PUT(request: NextRequest) {
         const configService = getConfigService();
         configService.clearCache('download_dir');
         configService.clearCache('media_dir');
+        configService.clearCache('ebook_bookorbit_ingest_path');
         configService.clearCache('audiobook_path_template');
         configService.clearCache('ebook_path_template');
         configService.clearCache('metadata_tagging_enabled');

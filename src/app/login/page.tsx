@@ -536,16 +536,16 @@ function LoginContent() {
                   // Audiobookshelf mode
                   if (backendMode === 'audiobookshelf') {
                     if (automationEnabled) {
-                      return "Request audiobooks and they'll automatically download and appear in your Audiobookshelf library";
+        return "Request books and they'll automatically download into the right destination";
                     }
-                    return "Request audiobooks for your Audiobookshelf library";
+        return "Request books for your library";
                   }
 
                   // Plex mode (default)
                   if (automationEnabled) {
-                    return "Request audiobooks and they'll automatically download and appear in your Plex library";
+      return "Request books and they'll automatically download into the right destination";
                   }
-                  return "Request audiobooks for your Plex library";
+      return "Request books for your library";
                 })()}
               </p>
             </div>

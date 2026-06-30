@@ -48,7 +48,7 @@ async function testPath(dirPath: string): Promise<boolean> {
 export async function POST(request: NextRequest) {
   return requireSetupIncompleteOrAdmin(request, async (req) => {
   try {
-    const { downloadDir, mediaDir, audiobookPathTemplate } = await req.json();
+    const { downloadDir, mediaDir, bookOrbitIngestPath, audiobookPathTemplate, ebookPathTemplate } = await req.json();
 
     if (!downloadDir || !mediaDir) {
       return NextResponse.json(
@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
     // Test both paths
     const downloadDirValid = await testPath(downloadDir);
     const mediaDirValid = await testPath(mediaDir);
+    const bookOrbitIngestPathValid = bookOrbitIngestPath ? await testPath(bookOrbitIngestPath) : true;
 
     // Validate template if provided
     let templateValidation: {
@@ -68,20 +69,24 @@ export async function POST(request: NextRequest) {
       previewPaths?: string[];
     } | undefined;
 
-    if (audiobookPathTemplate) {
-      const validation = validateTemplate(audiobookPathTemplate);
-      templateValidation = {
-        isValid: validation.valid,
-        error: validation.error,
-      };
+    const templatesToValidate = [audiobookPathTemplate, ebookPathTemplate].filter(Boolean);
+    const invalidTemplate = templatesToValidate
+      .map((template) => validateTemplate(template))
+      .find((validation) => !validation.valid);
 
-      // Generate previews only if template is valid
-      if (validation.valid) {
-        templateValidation.previewPaths = generateMockPreviews(audiobookPathTemplate);
-      }
+    if (invalidTemplate) {
+      templateValidation = {
+        isValid: false,
+        error: invalidTemplate.error,
+      };
+    } else if (audiobookPathTemplate) {
+      templateValidation = {
+        isValid: true,
+        previewPaths: generateMockPreviews(audiobookPathTemplate),
+      };
     }
 
-    const success = downloadDirValid && mediaDirValid;
+    const success = downloadDirValid && mediaDirValid && bookOrbitIngestPathValid && (templateValidation?.isValid !== false);
 
     if (!success) {
       const errors = [];
@@ -90,6 +95,12 @@ export async function POST(request: NextRequest) {
       }
       if (!mediaDirValid) {
         errors.push('Media directory path is invalid or parent mount is not writable');
+      }
+      if (!bookOrbitIngestPathValid) {
+        errors.push('EPUB destination path is invalid or parent mount is not writable');
+      }
+      if (templateValidation?.isValid === false) {
+        errors.push(templateValidation.error || 'Path template is invalid');
       }
 
       return NextResponse.json({
@@ -101,6 +112,10 @@ export async function POST(request: NextRequest) {
         mediaDir: {
           valid: mediaDirValid,
           error: mediaDirValid ? undefined : 'Media directory path is invalid or parent mount is not writable',
+        },
+        bookOrbitIngestPath: {
+          valid: bookOrbitIngestPathValid,
+          error: bookOrbitIngestPathValid ? undefined : 'EPUB destination path is invalid or parent mount is not writable',
         },
         template: templateValidation,
         error: errors.join('. '),
@@ -114,6 +129,9 @@ export async function POST(request: NextRequest) {
       },
       mediaDir: {
         valid: mediaDirValid,
+      },
+      bookOrbitIngestPath: {
+        valid: bookOrbitIngestPathValid,
       },
       template: templateValidation,
       message: 'Directories are ready and writable (created if needed)',

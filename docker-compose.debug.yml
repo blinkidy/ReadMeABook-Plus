@@ -50,6 +50,7 @@ services:
       - cache:/app/cache
       - ./downloads:/downloads
       - ./media:/media
+      - ./bookorbit-ingest:/bookorbit/ingest
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,6 +62,7 @@ services:
 
       # Redis Configuration
       REDIS_URL: redis://redis:6379
+      BOOKORBIT_INGEST_PATH: "/bookorbit/ingest"
 
       # JWT Secrets (generate with: openssl rand -base64 32)
       JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
