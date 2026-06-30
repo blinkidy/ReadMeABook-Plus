@@ -6,7 +6,7 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createRequestMock = vi.hoisted(() => vi.fn());
@@ -50,41 +50,28 @@ describe('AudiobookCard', () => {
     vi.useRealTimers();
   });
 
-  it('disables requests when no user is logged in', async () => {
+  it('does not render card-level request controls', async () => {
     const { AudiobookCard } = await import('@/components/audiobooks/AudiobookCard');
 
     render(<AudiobookCard audiobook={baseAudiobook} />);
 
-    const requestButton = screen.getByRole('button', { name: 'Sign in to Request' });
-    expect(requestButton).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Sign in to Request' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Request Audiobook' })).not.toBeInTheDocument();
     expect(createRequestMock).not.toHaveBeenCalled();
   });
 
-  it('creates a request and shows a success toast', async () => {
+  it('opens details for requesting instead of creating requests from the card', async () => {
     authState.user = { id: 'user-1', username: 'user' };
-    createRequestMock.mockResolvedValueOnce(undefined);
-
     const onRequestSuccess = vi.fn();
     const { AudiobookCard } = await import('@/components/audiobooks/AudiobookCard');
 
     render(<AudiobookCard audiobook={baseAudiobook} onRequestSuccess={onRequestSuccess} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Request Audiobook' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View details for Test Book by Author' }));
 
-    const requestPromise = createRequestMock.mock.results[0]?.value;
-    await act(async () => {
-      await requestPromise;
-    });
-
-    expect(createRequestMock).toHaveBeenCalledWith(baseAudiobook, { mediaType: 'audiobook' });
-    expect(onRequestSuccess).toHaveBeenCalled();
-
-    expect(screen.getByText(/Request created!/)).toBeInTheDocument();
-
-    await act(async () => {
-      vi.advanceTimersByTime(3000);
-    });
-    expect(screen.queryByText(/Request created!/)).toBeNull();
+    expect(screen.getByTestId('details-modal')).toHaveAttribute('data-open', 'true');
+    expect(createRequestMock).not.toHaveBeenCalled();
+    expect(onRequestSuccess).not.toHaveBeenCalled();
   });
 
   it('shows in-library state when available', async () => {
@@ -92,7 +79,8 @@ describe('AudiobookCard', () => {
 
     render(<AudiobookCard audiobook={{ ...baseAudiobook, isAvailable: true }} />);
 
-    expect(screen.getByText('In Your Library')).toBeInTheDocument();
+    expect(screen.queryByText('In Your Library')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View details for Test Book by Author' })).toBeInTheDocument();
   });
 
   it('opens the details modal when the title is clicked', async () => {
@@ -116,8 +104,8 @@ describe('AudiobookCard', () => {
       />
     );
 
-    // Processing status is shown as a div overlay, not a button
-    expect(screen.getByText('Processing')).toBeInTheDocument();
+    expect(screen.queryByText('Processing')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View details for Test Book by Author' })).toBeInTheDocument();
   });
 
   it('shows pending status for awaiting_approval requests', async () => {
@@ -134,11 +122,11 @@ describe('AudiobookCard', () => {
       />
     );
 
-    // Card shows "Requested" for all pending statuses
-    expect(screen.getByText('Requested')).toBeInTheDocument();
+    expect(screen.queryByText('Requested')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View details for Test Book by Author' })).toBeInTheDocument();
   });
 
-  it('allows re-requesting for denied status', async () => {
+  it('opens details for denied status instead of showing a card request button', async () => {
     authState.user = { id: 'user-1', username: 'user' };
     const { AudiobookCard } = await import('@/components/audiobooks/AudiobookCard');
 
@@ -148,34 +136,8 @@ describe('AudiobookCard', () => {
       />
     );
 
-    // Denied status allows re-requesting, so Request button is shown
-    expect(screen.getByRole('button', { name: 'Request Audiobook' })).toBeInTheDocument();
-  });
-
-  it('shows an error when a request fails', async () => {
-    authState.user = { id: 'user-1', username: 'user' };
-    createRequestMock.mockRejectedValueOnce(new Error('Request failed'));
-
-    const { AudiobookCard } = await import('@/components/audiobooks/AudiobookCard');
-
-    render(<AudiobookCard audiobook={baseAudiobook} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Request Audiobook' }));
-
-    const requestPromise = createRequestMock.mock.results[0]?.value;
-    await act(async () => {
-      try {
-        await requestPromise;
-      } catch {
-        // Expected for this test.
-      }
-    });
-
-    expect(screen.getByText('Request failed')).toBeInTheDocument();
-
-    await act(async () => {
-      vi.advanceTimersByTime(5000);
-    });
-    expect(screen.queryByText('Request failed')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Request Audiobook' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'View details for Test Book by Author' }));
+    expect(screen.getByTestId('details-modal')).toHaveAttribute('data-open', 'true');
   });
 });

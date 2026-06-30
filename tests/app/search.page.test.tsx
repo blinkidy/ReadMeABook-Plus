@@ -110,7 +110,7 @@ describe('SearchPage', () => {
     const { default: SearchPage } = await import('@/app/search/page');
     render(<SearchPage />);
 
-    expect(screen.getByText('Start typing to search for audiobooks')).toBeInTheDocument();
+    expect(screen.getByText('Start typing to search for audiobooks and books')).toBeInTheDocument();
     expect(useSearchMock).toHaveBeenCalledWith('');
   });
 
@@ -127,7 +127,7 @@ describe('SearchPage', () => {
     const { default: SearchPage } = await import('@/app/search/page');
     render(<SearchPage />);
 
-    const input = screen.getByPlaceholderText('Search by title, author, or narrator...');
+    const input = screen.getByPlaceholderText('Search audiobooks and books by title, author, or narrator...');
     fireEvent.change(input, { target: { value: 'Dune' } });
 
     await act(async () => {
