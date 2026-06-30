@@ -817,8 +817,8 @@ export class AudibleService {
 
   /**
    * Category audiobooks from Audible's bestseller chart for a category node.
-   * Uses /adblbestsellers?node=<categoryId> instead of generic search
-   * popularity because that matches Audible's visible "Bestselling" genre tab.
+   * Uses the /charts/best/.../<categoryId> route instead of /adblbestsellers?node=...
+   * because the latter redirects to the global chart and loses the genre scope.
    */
   async getCategoryBooks(categoryId: string, limit: number = 200): Promise<AudibleAudiobook[]> {
     await this.initialize();
@@ -834,11 +834,10 @@ export class AudibleService {
     while (audiobooks.length < limit && page <= maxPages) {
       try {
         const { data: response, meta } = await this.fetchWithRetry(
-          '/adblbestsellers',
+          `/charts/best/category-audiobooks/${categoryId}`,
           {
             params: {
               ipRedirectOverride: 'true',
-              node: categoryId,
               pageSize: AUDIBLE_PAGE_SIZE,
               ...(page > 1 ? { page } : {}),
             },

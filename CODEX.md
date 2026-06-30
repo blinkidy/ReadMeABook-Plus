@@ -56,8 +56,9 @@
   - User-facing "already processing" message differentiates EPUB.
 
 ## Audible Discovery Quality
-- User-configured genre/category home sections scrape Audible bestseller charts via `/adblbestsellers?node=<categoryId>`.
+- User-configured genre/category home sections scrape Audible bestseller charts via `/charts/best/category-audiobooks/<categoryId>`.
 - Avoid using generic `/search?node=<id>&sort=popularity-rank` for categories; that route can surface launch/promo-heavy oddities that do not match Audible's visible genre bestseller pages.
+- Avoid `/adblbestsellers?node=<categoryId>` for categories; Audible redirects it to the global bestsellers chart, so every genre can end up with the same popular snapshot.
 
 ## API And Service Changes Added
 - `src/app/api/requests/route.ts`

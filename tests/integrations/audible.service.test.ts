@@ -1135,11 +1135,11 @@ describe('AudibleService', () => {
   });
 
   // -------------------------------------------------------------------------
-  // getCategoryBooks() — HTML scraping of /adblbestsellers?node=<categoryId>
+  // getCategoryBooks() — HTML scraping of /charts/best/.../<categoryId>
   // -------------------------------------------------------------------------
 
   describe('getCategoryBooks()', () => {
-    it('hits /adblbestsellers on the htmlClient with node and pageSize', async () => {
+    it('hits the Audible genre bestseller chart on the htmlClient with pageSize', async () => {
       htmlClientMock.get.mockResolvedValue(
         htmlResponse(makeHtmlPage([makeProductListItemHtml()])),
       );
@@ -1148,8 +1148,10 @@ describe('AudibleService', () => {
       await service.getCategoryBooks('18685580011', 1);
 
       const params = htmlClientMock.get.mock.calls[0][1].params;
-      expect(htmlClientMock.get.mock.calls[0][0]).toBe('/adblbestsellers');
-      expect(params.node).toBe('18685580011');
+      expect(htmlClientMock.get.mock.calls[0][0]).toBe(
+        '/charts/best/category-audiobooks/18685580011',
+      );
+      expect(params.node).toBeUndefined();
       expect(params.pageSize).toBe(50);
       expect(params.sort).toBeUndefined();
     });
