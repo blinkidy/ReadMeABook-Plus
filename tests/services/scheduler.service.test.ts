@@ -17,6 +17,7 @@ const jobQueueMock = vi.hoisted(() => ({
   addRetryMissingTorrentsJob: vi.fn(),
   addRetryFailedImportsJob: vi.fn(),
   addFindMissingEbooksJob: vi.fn(),
+  addBookOrbitScanJob: vi.fn(),
   addCleanupSeededTorrentsJob: vi.fn(),
   addMonitorRssFeedsJob: vi.fn(),
   addSyncShelvesJob: vi.fn(),
@@ -81,7 +82,7 @@ describe('SchedulerService', () => {
     const service = new SchedulerService();
     await service.start();
 
-    expect(prismaMock.scheduledJob.create).toHaveBeenCalledTimes(10);
+    expect(prismaMock.scheduledJob.create).toHaveBeenCalledTimes(11);
     expect(jobQueueMock.addRepeatableJob).toHaveBeenCalledWith(
       'audible_refresh',
       { scheduledJobId: 'job-1' },
@@ -291,6 +292,7 @@ describe('SchedulerService', () => {
     ['retry_missing_torrents', 'addRetryMissingTorrentsJob'],
     ['retry_failed_imports', 'addRetryFailedImportsJob'],
     ['find_missing_ebooks', 'addFindMissingEbooksJob'],
+    ['bookorbit_library_scan', 'addBookOrbitScanJob'],
     ['cleanup_seeded_torrents', 'addCleanupSeededTorrentsJob'],
     ['monitor_rss_feeds', 'addMonitorRssFeedsJob'],
     ['sync_reading_shelves', 'addSyncShelvesJob'],

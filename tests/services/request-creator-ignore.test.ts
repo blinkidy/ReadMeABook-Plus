@@ -30,6 +30,7 @@ vi.mock('@/lib/utils/logger', () => ({
 // Mock findPlexMatch to return null (not in library)
 vi.mock('@/lib/utils/audiobook-matcher', () => ({
   findPlexMatch: vi.fn().mockResolvedValue(null),
+  findBookOrbitMatch: vi.fn().mockResolvedValue(null),
 }));
 
 // Mock AudibleService (default = no Audnexus data)
