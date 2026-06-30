@@ -124,6 +124,7 @@ export function AudiobookDetailsModal({
   const bothFormatsAvailable = audiobookAvailable && ebookAvailable;
   const hasEbookInProgress = !!ebookStatus?.hasActiveEbookRequest && !ebookAvailable;
   const canRequestAudiobook = !audiobookAvailable && status.canRequest;
+  const canSearchAudiobook = !audiobookAvailable;
   const canRequestEbook = !ebookAvailable && !!ebookStatus?.ebookSourcesEnabled && !ebookStatus?.hasActiveEbookRequest;
   const requestableFormats = useMemo<RequestFormat[]>(() => [
     ...(canRequestAudiobook ? ['audiobook' as const] : []),
@@ -754,7 +755,7 @@ export function AudiobookDetailsModal({
               </div>
 
               {/* Interactive Search - only when the audiobook is missing and user has permission */}
-              {canRequestAudiobook && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false) && (
+              {canSearchAudiobook && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false) && (
                 <button
                   onClick={handleInteractiveSearch}
                   disabled={!user}
@@ -768,7 +769,7 @@ export function AudiobookDetailsModal({
               )}
 
               {/* Manual Import - admin only, hidden during active processing and completed states */}
-              {user?.role === 'admin' && canRequestAudiobook && !['downloading', 'processing', 'searching', 'downloaded', 'completed', 'available'].includes(audiobookEffectiveStatus || '') && (
+              {user?.role === 'admin' && canSearchAudiobook && !['downloading', 'processing', 'searching', 'downloaded', 'completed', 'available'].includes(audiobookEffectiveStatus || '') && (
                 <button
                   onClick={() => setShowManualImport(true)}
                   className="p-3 rounded-xl bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 hover:bg-teal-200 dark:hover:bg-teal-900/50 transition-colors"
