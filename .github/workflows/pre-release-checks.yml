@@ -33,7 +33,7 @@ jobs:
       - name: Capture version information
         id: version
         run: |
-          echo "app_version=$(node -p 'require(\"./package.json\").version')" >> $GITHUB_OUTPUT
+          echo "app_version=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
           echo "git_commit=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
           echo "build_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
 

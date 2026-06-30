@@ -16,11 +16,12 @@ RUN apt-get update && apt-get install -y curl gnupg && \
     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg && \
     echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/postgresql.list
 
-# Install PostgreSQL, Redis, supervisord, and gosu (for reliable user switching)
+# Install PostgreSQL, Redis, ffmpeg, supervisord, and gosu (for reliable user switching)
 RUN apt-get update && apt-get install -y \
     postgresql-16 \
     postgresql-client-16 \
     redis-server \
+    ffmpeg \
     supervisor \
     curl \
     openssl \
@@ -31,12 +32,6 @@ RUN apt-get update && apt-get install -y \
     && locale-gen en_US.UTF-8 \
     && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
-
-# Install static ffmpeg (no transitive dependencies like imagemagick)
-ADD https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz /tmp/ffmpeg.tar.xz
-RUN cd /tmp && tar xf ffmpeg.tar.xz && \
-    cp ffmpeg-*-static/ffmpeg ffmpeg-*-static/ffprobe /usr/local/bin/ && \
-    rm -rf /tmp/ffmpeg*
 
 # Remove imagemagick (pre-installed in node:20-bookworm base image, not needed)
 RUN apt-get purge -y imagemagick imagemagick-6-common 'imagemagick-6*' \
