@@ -91,8 +91,10 @@
 - `src/lib/processors/bookorbit-scan.processor.ts`
   - Scans the BookOrbit library path without moving/deleting files.
   - Scan fallback: DB `ebook_bookorbit_library_path` -> env `BOOKORBIT_LIBRARY_PATH` -> ingest path -> media path.
-  - Uses ASIN from path/filename when present; otherwise tries exact title/author against `AudibleCache`.
-  - Adds title/author fallback matching only for `bookorbit://` library rows.
+  - Parses BookOrbit default names like `Author/Series/01. Title (Year)/01. Title (Year).epub` and file-as-book variants.
+  - Uses ASIN from path/filename when present; otherwise tries title/author against `AudibleCache`.
+  - Marks ebook requests available by ASIN, normalized title+author, or normalized title when BookOrbit author is unknown.
+  - Adds scoped BookOrbit fallback matching only for `bookorbit://` library rows; unique title-only matches are allowed when author metadata is missing.
 
 ## Deployment And Docs Changes Added
 - Added `.env.example`.

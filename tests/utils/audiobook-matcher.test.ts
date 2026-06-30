@@ -105,6 +105,62 @@ describe('audiobook-matcher', () => {
     expect(match?.plexGuid).toBe('bookorbit://abc123');
   });
 
+  it('matches a unique BookOrbit ebook by cleaned title when library author is unknown', async () => {
+    prismaMock.plexLibrary.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          plexGuid: 'bookorbit://yesteryear',
+          plexRatingKey: null,
+          title: 'Yesteryear',
+          author: 'Unknown Author',
+          asin: null,
+          isbn: null,
+        },
+      ]);
+
+    const { findPlexMatch } = await import('@/lib/utils/audiobook-matcher');
+    const match = await findPlexMatch({
+      asin: 'B00NOASIN2',
+      title: 'Yesteryear: A GMA Book Club Pick',
+      author: 'Caro Claire Burke',
+    });
+
+    expect(match?.plexGuid).toBe('bookorbit://yesteryear');
+  });
+
+  it('does not use loose BookOrbit title matching when multiple candidates share the title', async () => {
+    prismaMock.plexLibrary.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          plexGuid: 'bookorbit://one',
+          plexRatingKey: null,
+          title: 'The Last Thing',
+          author: 'Unknown Author',
+          asin: null,
+          isbn: null,
+        },
+        {
+          plexGuid: 'bookorbit://two',
+          plexRatingKey: null,
+          title: 'The Last Thing',
+          author: 'Unknown Author',
+          asin: null,
+          isbn: null,
+        },
+      ]);
+
+    const { findPlexMatch } = await import('@/lib/utils/audiobook-matcher');
+    const match = await findPlexMatch({
+      asin: 'B00NOASIN3',
+      title: 'The Last Thing',
+      author: 'Some Author',
+    });
+
+    expect(match).toBeNull();
+  });
+
   it('matches library items by ASIN or ISBN only (no fuzzy fallback)', async () => {
     const items = [
       { id: '1', externalId: 'g1', title: 'Alpha', author: 'Author A', asin: 'ASIN1' },

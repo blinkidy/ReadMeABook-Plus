@@ -10,6 +10,7 @@
 import { prisma } from '@/lib/db';
 import { LibraryItem } from '@/lib/services/library';
 import { getSiblingAsins } from '@/lib/services/works.service';
+import { cleanIndexerSearchTitle } from './search-title';
 import { RMABLogger } from './logger';
 
 // Module-level logger
@@ -31,12 +32,16 @@ export interface AudiobookMatchResult {
 }
 
 function normalizeBookKey(value: string): string {
-  return value
+  return cleanIndexerSearchTitle(value)
     .toLowerCase()
     .replace(/&/g, ' and ')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
+}
+
+function isUnknownAuthor(value: string): boolean {
+  return !value || normalizeBookKey(value) === 'unknown author' || normalizeBookKey(value) === 'unknown';
 }
 
 /**
@@ -207,10 +212,20 @@ export async function findBookOrbitMatch(
     take: 500,
   });
 
-  return (candidates || []).find((candidate) => (
-    normalizeBookKey(candidate.title) === titleKey &&
+  const titleMatches = (candidates || []).filter((candidate) => (
+    normalizeBookKey(candidate.title) === titleKey
+  ));
+
+  const authorMatch = titleMatches.find((candidate) => (
     normalizeBookKey(candidate.author) === authorKey
-  )) || null;
+  ));
+  if (authorMatch) return authorMatch;
+
+  const looseAuthorMatches = titleMatches.filter((candidate) => (
+    isUnknownAuthor(candidate.author) || isUnknownAuthor(audiobook.author)
+  ));
+
+  return looseAuthorMatches.length === 1 ? looseAuthorMatches[0] : null;
 }
 
 /**

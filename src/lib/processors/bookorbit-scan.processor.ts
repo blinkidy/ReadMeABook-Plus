@@ -8,6 +8,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { prisma } from '../db';
 import { getConfigService } from '../services/config.service';
+import { cleanIndexerSearchTitle } from '../utils/search-title';
 import { RMABLogger } from '../utils/logger';
 
 const logger = RMABLogger.create('BookOrbitScan');
@@ -29,6 +30,19 @@ interface DiscoveredEbook {
   asin?: string;
 }
 
+function normalizeBookKey(value: string): string {
+  return cleanIndexerSearchTitle(value)
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function isUnknownAuthor(value: string): boolean {
+  return !value || normalizeBookKey(value) === 'unknown author' || normalizeBookKey(value) === 'unknown';
+}
+
 function extractAsin(value: string): string | undefined {
   return value.match(/\bB[A-Z0-9]{9}\b/i)?.[0]?.toUpperCase();
 }
@@ -46,6 +60,14 @@ function cleanName(value: string): string {
     .replace(/\[[^\]]*\]/g, '')
     .replace(/\([^)]*\)/g, '')
     .replace(/[_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function cleanBookOrbitTitle(value: string): string {
+  return cleanName(value)
+    .replace(/^\s*\d+(?:\.\d+)?\s*[-_.]?\s*/, '')
+    .replace(/\s+\(\d{4}\)\s*$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -95,20 +117,20 @@ async function discoverEbook(rootPath: string, filePath: string): Promise<Discov
   const segments = relative.split(path.sep).filter(Boolean);
   const filename = path.basename(filePath, path.extname(filePath));
   const parent = segments.length > 1 ? segments[segments.length - 2] : filename;
-  const grandparent = segments.length > 2 ? segments[segments.length - 3] : '';
+  const titleSource = segments.length >= 4 ? parent : filename;
 
   const asin = extractAsin(relative);
-  let title = cleanName(parent || filename);
-  let author = cleanName(grandparent);
+  let title = cleanBookOrbitTitle(titleSource);
+  let author = segments.length > 1 ? cleanName(segments[0]) : '';
 
   const filenameParts = cleanName(filename).split(/\s+-\s+/);
   if ((!author || author.toLowerCase() === 'unknown') && filenameParts.length >= 2) {
-    title = filenameParts[0].trim();
+    title = cleanBookOrbitTitle(filenameParts[0]);
     author = filenameParts.slice(1).join(' - ').trim();
   }
 
   if (!author) author = 'Unknown Author';
-  if (!title) title = cleanName(filename) || path.basename(filePath);
+  if (!title) title = cleanBookOrbitTitle(filename) || cleanName(filename) || path.basename(filePath);
 
   if (asin) {
     const cached = await prisma.audibleCache.findUnique({
@@ -139,23 +161,62 @@ async function discoverEbook(rootPath: string, filePath: string): Promise<Discov
   return { filePath, title, author, asin };
 }
 
-async function markMatchingEbookRequestsAvailable(book: DiscoveredEbook): Promise<number> {
-  const where: any = {
-    type: 'ebook',
-    deletedAt: null,
-    status: { notIn: ['available', 'cancelled', 'denied'] },
-    audiobook: {},
-  };
-
+async function findMatchingEbookRequestIds(book: DiscoveredEbook): Promise<string[]> {
   if (book.asin) {
-    where.audiobook.audibleAsin = book.asin;
-  } else {
-    where.audiobook.title = { equals: book.title, mode: 'insensitive' };
-    where.audiobook.author = { equals: book.author, mode: 'insensitive' };
+    const asinMatches = await prisma.request.findMany({
+      where: {
+        type: 'ebook',
+        deletedAt: null,
+        status: { notIn: ['available', 'cancelled', 'denied'] },
+        audiobook: { audibleAsin: book.asin },
+      },
+      select: { id: true },
+    });
+    if (asinMatches.length > 0) return asinMatches.map((request) => request.id);
   }
 
+  const bookTitleKey = normalizeBookKey(book.title);
+  const bookAuthorKey = normalizeBookKey(book.author);
+  if (!bookTitleKey) return [];
+
+  const candidates = await prisma.request.findMany({
+    where: {
+      type: 'ebook',
+      deletedAt: null,
+      status: { notIn: ['available', 'cancelled', 'denied'] },
+    },
+    select: {
+      id: true,
+      audiobook: {
+        select: {
+          title: true,
+          author: true,
+        },
+      },
+    },
+  });
+
+  return candidates
+    .filter((request) => {
+      const requestTitleKey = normalizeBookKey(request.audiobook.title);
+      if (requestTitleKey !== bookTitleKey) return false;
+
+      const requestAuthorKey = normalizeBookKey(request.audiobook.author);
+      return (
+        isUnknownAuthor(book.author) ||
+        isUnknownAuthor(request.audiobook.author) ||
+        requestAuthorKey === bookAuthorKey
+      );
+    })
+    .map((request) => request.id);
+}
+
+async function markMatchingEbookRequestsAvailable(book: DiscoveredEbook): Promise<number> {
+  const requestIds = await findMatchingEbookRequestIds(book);
+  if (requestIds.length === 0) return 0;
+
   const result = await prisma.request.updateMany({
-    where,
+    where: { id: { in: requestIds } },
     data: {
       status: 'available',
       progress: 100,
