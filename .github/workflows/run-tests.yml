@@ -3,15 +3,6 @@ name: Backend Tests
 on:
   workflow_dispatch:
   workflow_call:
-    inputs:
-      send_notification:
-        description: "Whether to send Discord notification"
-        type: boolean
-        default: true
-    secrets:
-      WEBHOOK_URL:
-        description: "Discord webhook URL"
-        required: false
     outputs:
       success:
         description: "Whether tests passed"
@@ -173,86 +164,6 @@ jobs:
           echo "| Test Files | $TEST_FILES_PASSED passed ($TEST_FILES) |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests | $PASSED passed ($TOTAL) |" >> $GITHUB_STEP_SUMMARY
           echo "| Duration | ${DURATION}s |" >> $GITHUB_STEP_SUMMARY
-
-      - name: Send Discord notification
-        if: always() && (inputs.send_notification != false)
-        env:
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        run: |
-          if [ -z "$WEBHOOK_URL" ]; then
-            echo "No webhook URL provided, skipping notification"
-            exit 0
-          fi
-          
-          SUCCESS="${{ steps.test-results.outputs.success }}"
-          TOTAL="${{ steps.test-results.outputs.total }}"
-          PASSED="${{ steps.test-results.outputs.passed }}"
-          FAILED="${{ steps.test-results.outputs.failed }}"
-          DURATION="${{ steps.test-results.outputs.duration }}"
-          TEST_FILES="${{ steps.test-results.outputs.test_files }}"
-          TEST_FILES_PASSED="${{ steps.test-results.outputs.test_files_passed }}"
-          TEST_FILES_FAILED="${{ steps.test-results.outputs.test_files_failed }}"
-          
-          if [ "$SUCCESS" = "true" ]; then
-            COLOR=5763719
-            TITLE="✅ Tests Passed"
-            DESCRIPTION="All tests completed successfully for **ReadMeABook**"
-            TEST_FILES_VALUE="$TEST_FILES_PASSED passed ($TEST_FILES)"
-            TESTS_VALUE="$PASSED passed ($TOTAL)"
-          else
-            COLOR=15548997
-            TITLE="❌ Tests Failed"
-            DESCRIPTION="Some tests failed for **ReadMeABook**"
-            TEST_FILES_VALUE="$TEST_FILES_PASSED passed, $TEST_FILES_FAILED failed ($TEST_FILES)"
-            TESTS_VALUE="$PASSED passed, $FAILED failed ($TOTAL)"
-          fi
-          
-          curl -H "Content-Type: application/json" \
-            -X POST \
-            -d "{
-              \"embeds\": [{
-                \"title\": \"$TITLE\",
-                \"description\": \"$DESCRIPTION\",
-                \"color\": $COLOR,
-                \"fields\": [
-                  {
-                    \"name\": \"📁 Test Files\",
-                    \"value\": \"\`$TEST_FILES_VALUE\`\",
-                    \"inline\": true
-                  },
-                  {
-                    \"name\": \"🧪 Tests\",
-                    \"value\": \"\`$TESTS_VALUE\`\",
-                    \"inline\": true
-                  },
-                  {
-                    \"name\": \"⏱️ Duration\",
-                    \"value\": \"\`${DURATION}s\`\",
-                    \"inline\": true
-                  },
-                  {
-                    \"name\": \"🌿 Branch\",
-                    \"value\": \"\`${{ github.ref_name }}\`\",
-                    \"inline\": true
-                  },
-                  {
-                    \"name\": \"📋 Commit\",
-                    \"value\": \"[\`$(echo ${{ github.sha }} | cut -c1-7)\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})\",
-                    \"inline\": true
-                  },
-                  {
-                    \"name\": \"🔗 Workflow\",
-                    \"value\": \"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\",
-                    \"inline\": true
-                  }
-                ],
-                \"footer\": {
-                  \"text\": \"ReadMeABook CI/CD • Test Suite\"
-                },
-                \"timestamp\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"
-              }]
-            }" \
-            "$WEBHOOK_URL"
 
       - name: Fail if tests failed
         if: steps.test-results.outputs.success != 'true'
