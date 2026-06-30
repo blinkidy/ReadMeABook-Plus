@@ -317,9 +317,7 @@ describe('Notification Triggers - Integration Tests', () => {
         'req-1',
         'Test Book',
         'Test Author',
-        'testuser',
-        undefined,
-        'audiobook'
+        'testuser'
       );
     });
   });
