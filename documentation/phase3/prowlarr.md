@@ -20,7 +20,7 @@ Indexer aggregator for searching multiple torrent/usenet indexers simultaneously
 - Broader search yields more results (e.g., 20 vs 1)
 - Ranking algorithm filters out mismatches using author/narrator
 - Works around indexer limitations with complex queries
-- Promotional Audible subtitles after a colon are cleaned before automatic search when they match known marketing suffixes (e.g., `Yesteryear: A GMA Book Club Pick` → `Yesteryear`)
+- Promotional Audible subtitles are cleaned before automatic/interactive search when they match known marketing suffixes (e.g., `Yesteryear: A GMA Book Club Pick` or `Yesteryear A GMA Book Club Pick` → `Yesteryear`)
 
 **Extended Search:** Enabled (`extended=1`) - searches title, tags, labels, and metadata fields
 

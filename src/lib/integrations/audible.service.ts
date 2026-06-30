@@ -816,9 +816,9 @@ export class AudibleService {
   }
 
   /**
-   * Category audiobooks from Audible's HTML /search?node=<categoryId> page,
-   * sorted by popularity-rank. Uses HTML scraping (not the catalog API) so
-   * results match Audible's curated category-storefront ordering.
+   * Category audiobooks from Audible's bestseller chart for a category node.
+   * Uses /adblbestsellers?node=<categoryId> instead of generic search
+   * popularity because that matches Audible's visible "Bestselling" genre tab.
    */
   async getCategoryBooks(categoryId: string, limit: number = 200): Promise<AudibleAudiobook[]> {
     await this.initialize();
@@ -834,13 +834,12 @@ export class AudibleService {
     while (audiobooks.length < limit && page <= maxPages) {
       try {
         const { data: response, meta } = await this.fetchWithRetry(
-          '/search',
+          '/adblbestsellers',
           {
             params: {
               ipRedirectOverride: 'true',
               node: categoryId,
               pageSize: AUDIBLE_PAGE_SIZE,
-              sort: 'popularity-rank',
               ...(page > 1 ? { page } : {}),
             },
           },
@@ -849,7 +848,7 @@ export class AudibleService {
           HTML_MAX_BACKOFF_MS,
         );
 
-        const foundOnPage = this.parseSearchResultItems(
+        const foundOnPage = this.parseProductListItems(
           response.data,
           audiobooks,
           limit,
@@ -953,10 +952,8 @@ export class AudibleService {
   }
 
   /**
-   * Parse the `.s-result-item` / `.productListItem` blocks used by
-   * /search?node=<categoryId>. Pushes matched books into `audiobooks`
-   * (skipping duplicates and respecting `limit`) and returns the count parsed
-   * from this page.
+   * Parse generic Audible search-result blocks. Kept for search-style HTML
+   * layouts; category bestseller charts use parseProductListItems().
    */
   private parseSearchResultItems(
     html: string,

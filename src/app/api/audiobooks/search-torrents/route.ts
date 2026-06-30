@@ -14,6 +14,7 @@ import { getLanguageForRegion } from '@/lib/constants/language-config';
 import type { AudibleRegion } from '@/lib/types/audible';
 import { z } from 'zod';
 import { RMABLogger } from '@/lib/utils/logger';
+import { cleanIndexerSearchTitle } from '@/lib/utils/search-title';
 
 const logger = RMABLogger.create('API.AudiobookSearch');
 
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
 
       const body = await req.json();
       const { title, author, asin } = SearchSchema.parse(body);
+      const searchTitle = cleanIndexerSearchTitle(title);
 
       // Get enabled indexers from configuration
       const { getConfigService } = await import('@/lib/services/config.service');
@@ -79,7 +81,7 @@ export async function POST(request: NextRequest) {
         logger.info(`Skipping ${skippedIndexers.length} indexer(s) with no audiobook categories: ${skippedNames}`);
       }
 
-      logger.info(`Searching ${indexersConfig.length - skippedIndexers.length} enabled indexers in ${groups.length} group${groups.length > 1 ? 's' : ''}`, { searchQuery: title });
+      logger.info(`Searching ${indexersConfig.length - skippedIndexers.length} enabled indexers in ${groups.length} group${groups.length > 1 ? 's' : ''}`, { searchQuery: searchTitle, originalTitle: title });
 
       // Log each group for transparency
       groups.forEach((group, index) => {
@@ -95,7 +97,7 @@ export async function POST(request: NextRequest) {
         logger.debug(`Searching group ${i + 1}/${groups.length}: ${getGroupDescription(group)}`);
 
         try {
-          const groupResults = await prowlarr.searchWithVariations(title, author, {
+          const groupResults = await prowlarr.searchWithVariations(searchTitle, author, {
             categories: group.categories,
             indexerIds: group.indexerIds,
             maxResults: 100, // Limit per group
@@ -149,7 +151,7 @@ export async function POST(request: NextRequest) {
       // Rank torrents using the ranking algorithm with indexer priorities and flag configs
       // Note: rankTorrents now filters out results < 20 MB internally
       // requireAuthor: false - interactive search, show all results for user decision
-      const rankedResults = rankTorrents(results, { title, author, durationMinutes }, {
+      const rankedResults = rankTorrents(results, { title: searchTitle, author, durationMinutes }, {
         indexerPriorities,
         flagConfigs,
         requireAuthor: false,  // Interactive mode - let user decide
@@ -171,7 +173,7 @@ export async function POST(request: NextRequest) {
       const top3 = rankedResults.slice(0, 3);
       if (top3.length > 0) {
         logger.debug('==================== RANKING DEBUG ====================');
-        logger.debug('Search parameters', { requestedTitle: title, requestedAuthor: author });
+        logger.debug('Search parameters', { requestedTitle: searchTitle, originalTitle: title, requestedAuthor: author });
         logger.debug(`Top ${top3.length} results (out of ${rankedResults.length} total)`);
         logger.debug('--------------------------------------------------------');
         top3.forEach((result, index) => {

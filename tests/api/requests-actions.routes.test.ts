@@ -121,6 +121,42 @@ describe('Request action routes', () => {
     );
   });
 
+  it('cleans promotional title suffixes before request interactive search', async () => {
+    authRequest.json.mockResolvedValue({ customTitle: 'Yesteryear A GMA Book Club Pick' });
+    prismaMock.request.findUnique.mockResolvedValueOnce({
+      id: 'req-clean-title',
+      userId: 'user-1',
+      audiobook: { title: 'Yesteryear A GMA Book Club Pick', author: 'Caro Claire Burke', audibleAsin: null },
+    });
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      role: 'user',
+      interactiveSearchAccess: null,
+    });
+    configServiceMock.get.mockResolvedValueOnce(JSON.stringify([{ id: 1, priority: 10, categories: [3030] }]));
+    configServiceMock.get.mockResolvedValueOnce(null);
+    groupIndexersMock.mockReturnValue({ groups: [{ categories: [3030], indexerIds: [1] }], skippedIndexers: [] });
+    prowlarrMock.searchWithVariations.mockResolvedValueOnce([{ title: 'Yesteryear', size: 100 }]);
+    rankTorrentsMock.mockReturnValueOnce([
+      { title: 'Yesteryear', size: 100, score: 50, breakdown: { matchScore: 50, formatScore: 0, sizeScore: 0, seederScore: 0, notes: [] }, bonusPoints: 0, bonusModifiers: [], finalScore: 50 },
+    ]);
+
+    const { POST } = await import('@/app/api/requests/[id]/interactive-search/route');
+    const response = await POST({} as any, { params: Promise.resolve({ id: 'req-clean-title' }) });
+    const payload = await response.json();
+
+    expect(payload.success).toBe(true);
+    expect(prowlarrMock.searchWithVariations).toHaveBeenCalledWith(
+      'Yesteryear',
+      'Caro Claire Burke',
+      expect.objectContaining({ categories: [3030], indexerIds: [1] })
+    );
+    expect(rankTorrentsMock).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ title: 'Yesteryear', author: 'Caro Claire Burke' }),
+      expect.any(Object)
+    );
+  });
+
   it('performs interactive search without runtime when no ASIN', async () => {
     authRequest.json.mockResolvedValue({});
     prismaMock.request.findUnique.mockResolvedValueOnce({

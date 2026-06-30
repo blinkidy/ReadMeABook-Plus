@@ -153,7 +153,7 @@ function makeProductListItemHtml(overrides: HtmlBookOverrides = {}): string {
 
 /**
  * Produces a single .s-result-item block matching the selectors parsed by
- * parseSearchResultItems(). Used for /search?node=<categoryId> category pages.
+ * parseSearchResultItems(). Kept for search-style HTML parser coverage.
  */
 function makeSearchResultItemHtml(overrides: HtmlBookOverrides = {}): string {
   const {
@@ -1135,28 +1135,28 @@ describe('AudibleService', () => {
   });
 
   // -------------------------------------------------------------------------
-  // getCategoryBooks() — HTML scraping of /search?node=<categoryId>
+  // getCategoryBooks() — HTML scraping of /adblbestsellers?node=<categoryId>
   // -------------------------------------------------------------------------
 
   describe('getCategoryBooks()', () => {
-    it('hits /search on the htmlClient with node, pageSize, and popularity-rank sort', async () => {
+    it('hits /adblbestsellers on the htmlClient with node and pageSize', async () => {
       htmlClientMock.get.mockResolvedValue(
-        htmlResponse(makeHtmlPage([makeSearchResultItemHtml()])),
+        htmlResponse(makeHtmlPage([makeProductListItemHtml()])),
       );
 
       const service = new AudibleService();
       await service.getCategoryBooks('18685580011', 1);
 
       const params = htmlClientMock.get.mock.calls[0][1].params;
-      expect(htmlClientMock.get.mock.calls[0][0]).toBe('/search');
+      expect(htmlClientMock.get.mock.calls[0][0]).toBe('/adblbestsellers');
       expect(params.node).toBe('18685580011');
       expect(params.pageSize).toBe(50);
-      expect(params.sort).toBe('popularity-rank');
+      expect(params.sort).toBeUndefined();
     });
 
     it('does not include a page param on the first request', async () => {
       htmlClientMock.get.mockResolvedValue(
-        htmlResponse(makeHtmlPage([makeSearchResultItemHtml()])),
+        htmlResponse(makeHtmlPage([makeProductListItemHtml()])),
       );
       const service = new AudibleService();
       const delaySpy = vi.spyOn(service as any, 'delay').mockResolvedValue(undefined);
@@ -1168,10 +1168,10 @@ describe('AudibleService', () => {
 
     it('includes page=2 on the second request when paginating', async () => {
       const page1Items = Array.from({ length: 50 }, (_, i) =>
-        makeSearchResultItemHtml({ asin: `B${String(i).padStart(9, '0')}` }),
+        makeProductListItemHtml({ asin: `B${String(i).padStart(9, '0')}` }),
       );
       const page2Items = Array.from({ length: 50 }, (_, i) =>
-        makeSearchResultItemHtml({ asin: `B${String(i + 50).padStart(9, '0')}` }),
+        makeProductListItemHtml({ asin: `B${String(i + 50).padStart(9, '0')}` }),
       );
 
       htmlClientMock.get
@@ -1190,15 +1190,15 @@ describe('AudibleService', () => {
       const sharedAsin = 'BDUP000003';
 
       const page1Items = [
-        makeSearchResultItemHtml({ asin: sharedAsin }),
+        makeProductListItemHtml({ asin: sharedAsin }),
         ...Array.from({ length: 49 }, (_, i) =>
-          makeSearchResultItemHtml({ asin: `BCAT${String(i).padStart(6, '0')}` }),
+          makeProductListItemHtml({ asin: `BCAT${String(i).padStart(6, '0')}` }),
         ),
       ];
       const page2Items = [
-        makeSearchResultItemHtml({ asin: sharedAsin }),
+        makeProductListItemHtml({ asin: sharedAsin }),
         ...Array.from({ length: 49 }, (_, i) =>
-          makeSearchResultItemHtml({ asin: `BCAT2${String(i).padStart(5, '0')}` }),
+          makeProductListItemHtml({ asin: `BCAT2${String(i).padStart(5, '0')}` }),
         ),
       ];
 
@@ -1216,7 +1216,7 @@ describe('AudibleService', () => {
 
     it('uses htmlClient (not apiClient) for the request', async () => {
       htmlClientMock.get.mockResolvedValue(
-        htmlResponse(makeHtmlPage([makeSearchResultItemHtml()])),
+        htmlResponse(makeHtmlPage([makeProductListItemHtml()])),
       );
 
       const service = new AudibleService();
@@ -1230,7 +1230,7 @@ describe('AudibleService', () => {
       htmlClientMock.get.mockResolvedValue(
         htmlResponse(
           makeHtmlPage([
-            makeSearchResultItemHtml({
+            makeProductListItemHtml({
               asin: 'B0FULLCAST',
               narrators: ['Alice', 'Bob', 'Carol', 'Dan'],
             }),

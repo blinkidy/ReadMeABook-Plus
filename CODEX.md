@@ -47,12 +47,17 @@
 
 ## Search Quality
 - `src/lib/utils/search-title.ts`
-  - Cleans known promotional Audible subtitle suffixes before automatic indexer search.
+  - Cleans known promotional Audible subtitle suffixes before automatic and interactive indexer search.
   - Example: `Yesteryear: A GMA Book Club Pick` searches as `Yesteryear`.
-- Audiobook and EPUB automatic search paths use cleaned titles unless custom search terms are set.
+- Handles punctuation-stripped display titles like `Yesteryear A GMA Book Club Pick`.
+- Audiobook and EPUB automatic/interactive search paths clean known marketing suffixes before querying indexers.
 - `src/lib/hooks/useRequests.ts`
   - `createRequest()` accepts `mediaType`.
   - User-facing "already processing" message differentiates EPUB.
+
+## Audible Discovery Quality
+- User-configured genre/category home sections scrape Audible bestseller charts via `/adblbestsellers?node=<categoryId>`.
+- Avoid using generic `/search?node=<id>&sort=popularity-rank` for categories; that route can surface launch/promo-heavy oddities that do not match Audible's visible genre bestseller pages.
 
 ## API And Service Changes Added
 - `src/app/api/requests/route.ts`

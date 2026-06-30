@@ -15,6 +15,17 @@ const PROMOTIONAL_SUFFIX_PATTERNS = [
   /\bbestselling\s+author\b/i,
 ];
 
+const PROMOTIONAL_TAIL_PATTERNS = [
+  /\s*(?:[-:]\s*)?(?:a|an|the)?\s*gma\s+book\s+club\s+pick\s*$/i,
+  /\s*(?:[-:]\s*)?(?:a|an|the)?\s*book\s+club\s+pick\s*$/i,
+  /\s*(?:[-:]\s*)?(?:a|an|the)?\s*oprah'?s\s+book\s+club\s*$/i,
+  /\s*(?:[-:]\s*)?(?:a|an|the)?\s*reese'?s\s+book\s+club\s*$/i,
+  /\s*(?:[-:]\s*)?(?:a|an|the)?\s*nyt\s+bestseller\s*$/i,
+  /\s*(?:[-:]\s*)?(?:a|an|the)?\s*new\s+york\s+times\s+bestseller\s*$/i,
+  /\s*(?:[-:]\s*)?(?:a|an|the)?\s*international\s+bestseller\s*$/i,
+  /\s*(?:[-:]\s*)?(?:a|an|the)?\s*national\s+bestseller\s*$/i,
+];
+
 function normalizeSpaces(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
@@ -32,6 +43,12 @@ export function cleanIndexerSearchTitle(title: string): string {
 
   const subtitleMatch = normalized.match(/^(.+?)\s*:\s*(.+)$/);
   if (!subtitleMatch) {
+    for (const pattern of PROMOTIONAL_TAIL_PATTERNS) {
+      const cleaned = normalizeSpaces(normalized.replace(pattern, ''));
+      if (cleaned && cleaned !== normalized) {
+        return cleaned;
+      }
+    }
     return normalized;
   }
 

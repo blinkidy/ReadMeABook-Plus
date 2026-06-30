@@ -6,7 +6,7 @@
 
 Audiobook metadata for discovery, search, and detail pages. Split by access pattern:
 
-- **Nightly discovery refresh** (popular / new releases / category lists) — scraped from Audible's **curated HTML storefronts** (`www.audible.<tld>/adblbestsellers`, `/newreleases`, `/search?node=<id>`). The HTML pages reflect Audible's own editorial picks.
+- **Nightly discovery refresh** (popular / new releases / category lists) — scraped from Audible's **curated HTML storefronts** (`www.audible.<tld>/adblbestsellers`, `/newreleases`). Category lists use `/adblbestsellers?node=<id>` so they match Audible's visible genre bestseller charts.
 - **User-facing real-time** (search, author books, categories listing, per-ASIN details) — Audible's unauthenticated public **JSON catalog API** (`api.audible.<tld>/1.0/catalog/*`).
 - **Per-ASIN detail lookups** — Audnexus (`api.audnex.us/books/{asin}`) primary; catalog API used as fallback when Audnexus returns 404.
 
@@ -25,9 +25,9 @@ Audiobook metadata for discovery, search, and detail pages. Split by access patt
 |---|---|---|
 | Popular | `/adblbestsellers` | `pageSize=50`, `page=<n>` (omitted on first page) |
 | New releases | `/newreleases` | `pageSize=50`, `page=<n>` (omitted on first page) |
-| Category books | `/search` | `node=<categoryId>&pageSize=50&sort=popularity-rank&page=<n>` |
+| Category books | `/adblbestsellers` | `node=<categoryId>&pageSize=50&page=<n>` |
 
-Parsed via cheerio. Selectors: `.productListItem` (popular/new releases), `.s-result-item, .productListItem` (categories).
+Parsed via cheerio. Selectors: `.productListItem` for popular, new releases, and category bestseller charts.
 
 ### Real-time (JSON catalog API — `apiClient`, baseURL `api.audible.<tld>`)
 
@@ -113,7 +113,7 @@ Configurable Audible region for accurate metadata matching across international 
 
 **Per-region HTTP clients (on init):**
 - `apiClient` — `baseURL=apiBaseUrl`, `Accept: application/json`, `User-Agent: ReadMeABook/1.0`, no language/ipRedirect params. Used for the real-time JSON catalog operations (search, author books, categories listing, per-ASIN details fallback).
-- `htmlClient` — `baseURL=baseUrl`, rotating browser headers (`pickUserAgent` + `getBrowserHeaders`), default params `ipRedirectOverride=true` + `language=<audibleLocaleParam>`. Used by the nightly discovery refresh (`/adblbestsellers`, `/newreleases`, `/search?node=...`), by `audible-series.ts`, and by `getBaseUrl()`-based link generation.
+- `htmlClient` — `baseURL=baseUrl`, rotating browser headers (`pickUserAgent` + `getBrowserHeaders`), default params `ipRedirectOverride=true` + `language=<audibleLocaleParam>`. Used by the nightly discovery refresh (`/adblbestsellers`, `/newreleases`, `/adblbestsellers?node=...`), by `audible-series.ts`, and by `getBaseUrl()`-based link generation.
 - Audnexus calls include `region=<audnexusParam>`.
 
 **Files:**
@@ -186,7 +186,7 @@ Watched-list background jobs (`watched-lists.service.ts`) run the local pass onl
 Discovery APIs serve cached data from DB with real-time matching.
 
 **Flow:**
-1. `audible_refresh` cron runs daily → fetches 200 popular + 200 new releases + user-configured categories by scraping Audible's curated HTML storefronts (`/adblbestsellers`, `/newreleases`, `/search?node=<id>&sort=popularity-rank`).
+1. `audible_refresh` cron runs daily → fetches 200 popular + 200 new releases + user-configured categories by scraping Audible's curated HTML storefronts (`/adblbestsellers`, `/newreleases`, `/adblbestsellers?node=<id>`).
 2. Downloads and caches cover thumbnails locally.
 3. Stores metadata in `audible_cache`, ranked entries in `audible_cache_categories` with reserved IDs (`__popular__`, `__new_releases__`) and user category IDs.
 4. Cleans up unused thumbnails after sync.
@@ -296,7 +296,7 @@ interface AuthorBooksResult {
 **Discovery refresh reverted to curated HTML scraping (2026-05-14)**
 - **Problem:** After switching all catalog ops to the JSON catalog API in `f564d0a`, the nightly discovery refresh (Popular / New Releases / user-configured Categories) started serving junk: New Releases became 100% preorders out to 2027, and Popular was dominated by launch-day no-name shovelware.
 - **Root cause:** `products_sort_by=BestSellers` is a right-now sales velocity rank that spikes on launch promos and preorder windows; `-ReleaseDate` returns all catalog items in date order with no released-only filter. The catalog API exposes no server-side filter to exclude preorders or sort by established popularity (verified by exhaustively testing `release_time`, `availability_status`, `customer_rights`, `Reviewed`/`MostListened`/`SalesRank` sorts — all silently ignored or rejected). Doing the curation client-side would have made RMAB the editorial curator, which Audible's storefront pages already do well.
-- **Fix:** Hybrid architecture — the three refresh-only methods (`getPopularAudiobooks`, `getNewReleases`, `getCategoryBooks`) went back to scraping Audible's curated HTML storefronts (`/adblbestsellers`, `/newreleases`, `/search?node=<id>&sort=popularity-rank`). All user-facing real-time paths (search, author books, categories listing, per-ASIN details) stayed on the JSON catalog API. To keep the higher-503-risk HTML traffic resilient on the unattended nightly job, `fetchWithRetry()` accepts an optional `maxBackoffMs` cap and HTML callers use `HTML_MAX_RETRIES=12` + `HTML_MAX_BACKOFF_MS=180_000` (3-min cap). Healthy users finish quickly; 503-blocked users grind through patiently.
+- **Fix:** Hybrid architecture — the refresh-only methods (`getPopularAudiobooks`, `getNewReleases`, `getCategoryBooks`) scrape Audible's curated HTML storefronts (`/adblbestsellers`, `/newreleases`, `/adblbestsellers?node=<id>`). All user-facing real-time paths (search, author books, categories listing, per-ASIN details) stayed on the JSON catalog API. To keep the higher-503-risk HTML traffic resilient on the unattended nightly job, `fetchWithRetry()` accepts an optional `maxBackoffMs` cap and HTML callers use `HTML_MAX_RETRIES=12` + `HTML_MAX_BACKOFF_MS=180_000` (3-min cap). Healthy users finish quickly; 503-blocked users grind through patiently.
 - **Location:** `src/lib/integrations/audible.service.ts` (three methods + two private parsers `parseProductListItems` / `parseSearchResultItems`); `src/lib/utils/scrape-resilience.ts` (`jitteredBackoff` cap parameter).
 
 **Audiobookshelf metadata matching not respecting configured region (2026-01-28)**
