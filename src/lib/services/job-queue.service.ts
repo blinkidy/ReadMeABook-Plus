@@ -25,6 +25,7 @@ export type JobType =
   | 'retry_missing_torrents'
   | 'retry_failed_imports'
   | 'find_missing_ebooks'
+  | 'bookorbit_library_scan'
   | 'cleanup_seeded_torrents'
   | 'monitor_rss_feeds'
   | 'sync_reading_shelves'
@@ -107,6 +108,10 @@ export interface RetryFailedImportsPayload extends JobPayload {
 }
 
 export interface FindMissingEbooksPayload extends JobPayload {
+  scheduledJobId?: string;
+}
+
+export interface BookOrbitScanPayload extends JobPayload {
   scheduledJobId?: string;
 }
 
@@ -395,6 +400,12 @@ export class JobQueueService {
       const { processFindMissingEbooks } = await import('../processors/find-missing-ebooks.processor');
       const payloadWithJobId = await this.ensureJobRecord(job, 'find_missing_ebooks');
       return await processFindMissingEbooks(payloadWithJobId);
+    });
+
+    this.queue.process('bookorbit_library_scan', 1, async (job: BullJob<BookOrbitScanPayload>) => {
+      const { processBookOrbitScan } = await import('../processors/bookorbit-scan.processor');
+      const payloadWithJobId = await this.ensureJobRecord(job, 'bookorbit_library_scan');
+      return await processBookOrbitScan(payloadWithJobId);
     });
 
     this.queue.process('cleanup_seeded_torrents', 1, async (job: BullJob<CleanupSeededTorrentsPayload>) => {
@@ -776,6 +787,21 @@ export class JobQueueService {
       {
         scheduledJobId,
       } as FindMissingEbooksPayload,
+      {
+        priority: 7,
+      }
+    );
+  }
+
+  /**
+   * Add BookOrbit library scan job
+   */
+  async addBookOrbitScanJob(scheduledJobId?: string): Promise<string> {
+    return await this.addJob(
+      'bookorbit_library_scan',
+      {
+        scheduledJobId,
+      } as BookOrbitScanPayload,
       {
         priority: 7,
       }

@@ -570,7 +570,7 @@ export async function processOrganizeFiles(payload: OrganizeFilesPayload): Promi
  * - No metadata tagging
  * - No cover art download
  * - No files hash generation
- * - Sends "available" notification at downloaded state (terminal for ebooks)
+ * - Sends "available" notification when the BookOrbit file is organized
  */
 async function processEbookOrganization(
   payload: OrganizeFilesPayload,
@@ -822,11 +822,12 @@ async function processEbookOrganization(
     },
   });
 
-  // Update request to downloaded (terminal state for ebooks)
+  // Update request to available. First-class ebook requests do not wait for
+  // Plex/ABS matching; the organized BookOrbit file is the availability signal.
   await prisma.request.update({
     where: { id: requestId },
     data: {
-      status: 'downloaded',
+      status: 'available',
       progress: 100,
       completedAt: new Date(),
       updatedAt: new Date(),
@@ -836,10 +837,9 @@ async function processEbookOrganization(
   // Apply post-import category to torrent client if configured
   await applyPostImportCategory(requestId, logger);
 
-  logger.info(`Ebook request ${requestId} completed - status: downloaded (terminal)`);
+  logger.info(`Ebook request ${requestId} completed - status: available`);
 
-  // Send "available" notification for ebooks at downloaded state
-  // (since ebooks don't transition to 'available' via Plex matching)
+  // Send "available" notification for ebooks at their terminal state.
   const jobQueue = getJobQueueService();
   await jobQueue.addNotificationJob(
     'request_available',

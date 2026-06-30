@@ -10,7 +10,7 @@ Ebooks are first-class citizens in RMAB, with their own request type, tracking, 
 ### First-Class Ebook Requests
 - **Request Type:** `type: 'ebook'` (vs `'audiobook'`)
 - **Parent Relationship:** Ebook requests are children of audiobook requests (`parentRequestId`)
-- **Terminal State:** `downloaded` (ebooks don't have "available" state like audiobooks)
+- **Terminal State:** `available` after ebook file organization into BookOrbit
 - **UI Badge:** Orange (#f16f19) ebook badge to distinguish from audiobooks
 - **Separate Tracking:** Own progress, status, and error handling
 
@@ -30,8 +30,8 @@ Ebooks are first-class citizens in RMAB, with their own request type, tracking, 
 2. Ebook request created automatically (if source enabled)
 3. `search_ebook` job searches Anna's Archive
 4. `start_direct_download` downloads via HTTP
-5. `organize_files` copies to audiobook folder
-6. Request marked as `downloaded` (terminal)
+5. `organize_files` copies to BookOrbit ingest path
+6. Request marked as `available` (terminal)
 7. "Available" notification sent
 
 ### Flow (Indexer Search)
@@ -40,8 +40,8 @@ Ebooks are first-class citizens in RMAB, with their own request type, tracking, 
 3. `search_ebook` job searches indexers (if Anna's Archive failed/disabled)
 4. `download_torrent` job adds to qBittorrent/SABnzbd (reuses audiobook processor)
 5. `monitor_download` tracks progress
-6. `organize_files` copies to audiobook folder
-7. Request marked as `downloaded` (terminal)
+6. `organize_files` copies to BookOrbit ingest path
+7. Request marked as `available` (terminal)
 8. Torrent left to seed (respects seeding limits)
 
 ### Configuration
@@ -76,6 +76,17 @@ Ebooks are first-class citizens in RMAB, with their own request type, tracking, 
 ### Safety-Net: Find Missing Ebooks Job
 
 A scheduled `find_missing_ebooks` job (daily midnight, enabled by default) backstops the auto-grab path for cases where it silently misses books (race conditions, transient indexer failures, requests created before sources were configured, books from Goodreads/Hardcover sync). Per run it scans up to 50 audiobook requests in `downloaded`/`available` status and triggers the existing ebook fetch flow for any audiobook missing a successful ebook companion. **Lifetime auto-retry cap: 5 per audiobook** — after 5 failed auto-attempts the job stops retrying that audiobook (admin Manual "Fetch Ebook" remains available). Counter is tracked in `Request.ebookAutoRetryCount` and is **processor-private**: manual Fetch Ebook routes never read, write, or reset it. Gated by `ebook_auto_grab_enabled` AND at least one source enabled; logs no-op runs honestly. See `documentation/backend/services/scheduler.md` for full details.
+
+### BookOrbit Library Scan
+
+Scheduled `bookorbit_library_scan` job (every 6 hours, enabled by default):
+- Root path: `ebook_bookorbit_library_path` → `BOOKORBIT_LIBRARY_PATH` → `ebook_bookorbit_ingest_path` → `BOOKORBIT_INGEST_PATH` → `media_dir` → `MEDIA_DIR`
+- Use the library path for finished BookOrbit books; use the ingest path only for RMAB's EPUB drop destination.
+- Reads ebook files only: `.epub`, `.pdf`, `.mobi`, `.azw`, `.azw3`, `.fb2`, `.cbz`, `.cbr`
+- Upserts rows in `plex_library` with deterministic `bookorbit://{sha1(filePath)}` IDs
+- Uses ASIN from path/filename when present; otherwise exact title+author match against `AudibleCache`
+- Marks matching first-class ebook requests `available`
+- Does not move, delete, or modify BookOrbit files
 
 ### Kindle EPUB Fix
 
@@ -161,7 +172,7 @@ Ebook torrent ranking uses unified algorithm with ebook-specific scoring:
 
 ### Status Flow
 ```
-pending → searching → downloading → processing → downloaded (terminal)
+pending → searching → downloading → processing → available (terminal)
                  ↘ awaiting_search (retry) ↗
 ```
 
@@ -222,6 +233,7 @@ Search: https://annas-archive.gl/search?q=Title+Author&ext=epub&lang=en
 - `src/lib/processors/direct-download.processor.ts` - Anna's Archive downloads
 - `src/lib/processors/download-torrent.processor.ts` - Indexer downloads (shared)
 - `src/lib/processors/organize-files.processor.ts` (ebook branch)
+- `src/lib/processors/bookorbit-scan.processor.ts` - BookOrbit availability scan
 
 **Services:**
 - `src/lib/services/ebook-scraper.ts` - Anna's Archive scraping

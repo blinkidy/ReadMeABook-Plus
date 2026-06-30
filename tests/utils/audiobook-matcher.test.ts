@@ -20,6 +20,7 @@ vi.mock('@/lib/db', () => ({
 describe('audiobook-matcher', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.plexLibrary.findFirst.mockResolvedValue(null);
   });
 
   it('returns ASIN exact match from dedicated field', async () => {
@@ -80,6 +81,30 @@ describe('audiobook-matcher', () => {
     expect(match).toBeNull();
   });
 
+  it('matches BookOrbit-scanned ebooks by exact normalized title and author when ASIN is missing', async () => {
+    prismaMock.plexLibrary.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          plexGuid: 'bookorbit://abc123',
+          plexRatingKey: null,
+          title: 'Yesteryear',
+          author: 'Caro Claire Burke',
+          asin: null,
+          isbn: null,
+        },
+      ]);
+
+    const { findPlexMatch } = await import('@/lib/utils/audiobook-matcher');
+    const match = await findPlexMatch({
+      asin: 'B00NOASIN1',
+      title: 'Yesteryear',
+      author: 'Caro Claire Burke',
+    });
+
+    expect(match?.plexGuid).toBe('bookorbit://abc123');
+  });
+
   it('matches library items by ASIN or ISBN only (no fuzzy fallback)', async () => {
     const items = [
       { id: '1', externalId: 'g1', title: 'Alpha', author: 'Author A', asin: 'ASIN1' },
@@ -110,6 +135,7 @@ describe('audiobook-matcher', () => {
           isbn: null,
         },
       ])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
     prismaMock.audiobook.findMany.mockResolvedValue([
@@ -145,6 +171,38 @@ describe('audiobook-matcher', () => {
 
     expect(results[1].isAvailable).toBe(false);
     expect(results[1].isRequested).toBe(false);
+  });
+
+  it('treats fulfilled ebook requests as requested/completed search state', async () => {
+    prismaMock.plexLibrary.findMany.mockResolvedValue([]);
+
+    prismaMock.audiobook.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        audibleAsin: 'ASIN1',
+        requests: [
+          {
+            id: 'r-ebook',
+            status: 'available',
+            type: 'ebook',
+            userId: 'other-user',
+            user: { plexUsername: 'OtherUser' },
+          },
+        ],
+      },
+    ]);
+
+    prismaMock.reportedIssue.findMany.mockResolvedValue([]);
+
+    const { enrichAudiobooksWithMatches } = await import('@/lib/utils/audiobook-matcher');
+    const results = await enrichAudiobooksWithMatches(
+      [{ asin: 'ASIN1', title: 'Ebook One', author: 'Author One' }],
+      'current-user',
+    );
+
+    expect(results[0].isRequested).toBe(true);
+    expect((results[0] as any).requestStatus).toBe('available');
+    expect((results[0] as any).requestId).toBe('r-ebook');
   });
 });
 

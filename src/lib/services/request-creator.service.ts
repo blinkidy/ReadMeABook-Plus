@@ -10,7 +10,7 @@
 import { prisma } from '@/lib/db';
 import { getJobQueueService } from '@/lib/services/job-queue.service';
 import { getConfigService } from '@/lib/services/config.service';
-import { findPlexMatch } from '@/lib/utils/audiobook-matcher';
+import { findBookOrbitMatch, findPlexMatch } from '@/lib/utils/audiobook-matcher';
 import { getAudibleService } from '@/lib/integrations/audible.service';
 import { RMABLogger } from '@/lib/utils/logger';
 import { shouldSkipAutoSearch } from '@/lib/utils/release-date';
@@ -99,6 +99,38 @@ export async function createRequestForUser(
           message: 'This audiobook is on your ignore list',
         };
       }
+    }
+  } else {
+    const existingFulfilledEbook = await prisma.request.findFirst({
+      where: {
+        audiobook: { audibleAsin: audiobook.asin },
+        type: 'ebook',
+        status: { in: ['available', 'downloaded'] },
+        deletedAt: null,
+      },
+    });
+
+    if (existingFulfilledEbook) {
+      return {
+        success: false,
+        reason: 'already_available',
+        message: 'This EPUB is already available in your BookOrbit library',
+      };
+    }
+
+    const bookOrbitMatch = await findBookOrbitMatch({
+      asin: audiobook.asin,
+      title: audiobook.title,
+      author: audiobook.author,
+      narrator: audiobook.narrator,
+    });
+
+    if (bookOrbitMatch) {
+      return {
+        success: false,
+        reason: 'already_available',
+        message: 'This EPUB is already available in your BookOrbit library',
+      };
     }
   }
 

@@ -32,6 +32,8 @@
 - EPUB requests enqueue `addSearchEbookJob(requestId, payload, 'epub')`.
 - Audiobook requests still enqueue the normal audiobook search job.
 - Notifications label EPUB requests as `(EPUB)`.
+- Completed first-class EPUB requests now mark `Request.status = 'available'` after BookOrbit organization so they hide from discovery and show complete in admin views.
+- `bookorbit_library_scan` periodically scans the configured BookOrbit library path, registers found ebook files in `plex_library` with `bookorbit://...` IDs, and marks matching ebook requests available.
 
 ## UI Changes Added
 - `src/components/audiobooks/AudiobookCard.tsx`
@@ -72,7 +74,8 @@
 
 ## BookOrbit EPUB Destination Added
 - New optional env var: `BOOKORBIT_INGEST_PATH`.
-- New settings key: `ebook_bookorbit_ingest_path`.
+- New optional env var: `BOOKORBIT_LIBRARY_PATH`.
+- New settings keys: `ebook_bookorbit_ingest_path`, `ebook_bookorbit_library_path`.
 - Fallback chain for ebook organization:
   1. DB config `ebook_bookorbit_ingest_path`
   2. Env `BOOKORBIT_INGEST_PATH`
@@ -85,10 +88,15 @@
   - Ebook organization uses `getEbookFileOrganizer()`.
   - Audiobook organization still uses `getFileOrganizer()`.
 - Settings and setup path testing now include the EPUB destination path.
+- `src/lib/processors/bookorbit-scan.processor.ts`
+  - Scans the BookOrbit library path without moving/deleting files.
+  - Scan fallback: DB `ebook_bookorbit_library_path` -> env `BOOKORBIT_LIBRARY_PATH` -> ingest path -> media path.
+  - Uses ASIN from path/filename when present; otherwise tries exact title/author against `AudibleCache`.
+  - Adds title/author fallback matching only for `bookorbit://` library rows.
 
 ## Deployment And Docs Changes Added
 - Added `.env.example`.
-- Added `/bookorbit/ingest` volume/env support to:
+- Added `/bookorbit/ingest` and `/bookorbit/library` volume/env support to:
   - `docker-compose.yml`
   - `docker-compose.local.yml`
   - `docker-compose.debug.yml`

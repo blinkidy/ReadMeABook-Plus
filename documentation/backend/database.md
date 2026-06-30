@@ -67,6 +67,7 @@ PostgreSQL database storing users, audiobooks, requests, downloads, configuratio
   - **denied** - Request rejected by admin (terminal state)
   - **pending** - Request approved and queued for processing
   - **awaiting_release** - Book has a future release date; auto-search skipped until release (admin toggle controls behavior)
+  - **ebook available** - first-class ebook requests become `available` after BookOrbit file organization; no Plex/ABS match required
 - `release_date` (Date, nullable) - Book release date snapshot from Audnexus at request creation; used by skip-unreleased-auto-search gate
 - `progress` (0-100), `priority`, `error_message`
 - `search_attempts`, `download_attempts`, `import_attempts`, `max_import_retries` (default 5)
@@ -94,7 +95,7 @@ PostgreSQL database storing users, audiobooks, requests, downloads, configuratio
 
 ### Jobs
 - `id` (UUID PK), `bull_job_id`, `request_id` (FK nullable)
-- `type` ('search_indexers'|'monitor_download'|'organize_files'|'scan_plex'|'match_plex'|'plex_library_scan'|'plex_recently_added_check'|'audible_refresh'|'retry_missing_torrents'|'retry_failed_imports'|'cleanup_seeded_torrents'|'monitor_rss_feeds')
+- `type` ('search_indexers'|'monitor_download'|'organize_files'|'scan_plex'|'match_plex'|'plex_library_scan'|'plex_recently_added_check'|'audible_refresh'|'retry_missing_torrents'|'retry_failed_imports'|'bookorbit_library_scan'|'cleanup_seeded_torrents'|'monitor_rss_feeds')
 - `status` ('pending'|'active'|'completed'|'failed'|'delayed'|'stuck')
 - `priority`, `attempts`, `max_attempts` (default 3)
 - `payload` (JSONB), `result` (JSONB), `error_message`, `stack_trace`

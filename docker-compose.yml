@@ -17,6 +17,7 @@ services:
       - ./downloads:/downloads
       - ./media:/media
       - ./bookorbit-ingest:/bookorbit/ingest
+      - ./bookorbit-library:/bookorbit/library:ro
 
       # Book Drop: optional folder for Manual Import (Admin → audiobook → Manual Import)
       # Map any host folder here and it will appear as a browsable root in the file picker.
@@ -50,6 +51,7 @@ services:
       PUID: 1000
       PGID: 1000
       BOOKORBIT_INGEST_PATH: "/bookorbit/ingest"
+      BOOKORBIT_LIBRARY_PATH: "/bookorbit/library"
 
       # ========================================================================
       # OPTIONAL: File Permission Mask

@@ -63,10 +63,10 @@ export async function processCleanupSeededTorrents(payload: CleanupSeededTorrent
             status: 'available',
             deletedAt: null,
           },
-          // Ebook requests that are fully downloaded (terminal state for ebooks)
+          // Ebook requests that are fully organized into BookOrbit
           {
             type: 'ebook',
-            status: 'downloaded',
+            status: { in: ['available', 'downloaded'] },
             deletedAt: null,
           },
           // Soft-deleted requests of any type (orphaned downloads)
@@ -88,7 +88,7 @@ export async function processCleanupSeededTorrents(payload: CleanupSeededTorrent
       take: 100, // Limit to 100 requests per run
     });
 
-    logger.info(`Found ${completedRequests.length} requests to check (audiobook: available, ebook: downloaded, or soft-deleted)`);
+    logger.info(`Found ${completedRequests.length} requests to check (audiobook: available, ebook: available/downloaded, or soft-deleted)`);
 
     let cleaned = 0;
     let skipped = 0;
