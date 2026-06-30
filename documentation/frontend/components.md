@@ -23,12 +23,12 @@ src/components/
 ## Key Components
 
 **Layout**
-- **Header** ✅ - Top nav, search input, user menu with "Change Password" option (local users only), logout
+- **Header** ✅ - Top nav, always-visible authenticated search input, user menu with "Change Password" option (local users only), logout
 - **Sidebar** - Admin side nav
 - **Footer** - Version, links
 
 **Audiobooks**
-- **AudiobookCard** ✅ - Cover, title, author, narrator, duration, request button, clickable to open details modal. Shows "Requested by [username]" when someone else has requested the book, "Requested" when current user has requested it
+- **AudiobookCard** ✅ - Cover, title, author, narrator, duration, clickable to open details modal. Request actions live in details modal for touch-first use. Shows "Requested by [username]" when someone else has requested the book, "Requested" when current user has requested it
 - **AudiobookGrid** - Responsive grid (1/2/3/4 cols)
 - **AudiobookDetailsModal** ✅ - Full-screen modal with comprehensive metadata (description, genres, rating, release date, narrator, language, format, publisher, request functionality). Shows requesting user's name when applicable
 

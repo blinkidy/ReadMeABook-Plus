@@ -16,6 +16,7 @@ import { rankEbookTorrents, RankedEbookTorrent } from '../utils/ranking-algorith
 import { groupIndexersByCategories, getGroupDescription } from '../utils/indexer-grouping';
 import { getLanguageForRegion } from '../constants/language-config';
 import { filterBlockedResults } from '../utils/filter-blocked-results';
+import { cleanIndexerSearchTitle } from '../utils/search-title';
 import type { AudibleRegion } from '../types/audible';
 
 // Import ebook scraper functions for Anna's Archive
@@ -49,11 +50,13 @@ export async function processSearchEbook(payload: SearchEbookPayload): Promise<a
     });
 
     // Use custom search terms if set, otherwise use audiobook title
-    const effectiveSearchTitle = requestRecord?.customSearchTerms || audiobook.title;
+    const effectiveSearchTitle = requestRecord?.customSearchTerms || cleanIndexerSearchTitle(audiobook.title);
     const searchAudiobook = { ...audiobook, title: effectiveSearchTitle };
 
     if (requestRecord?.customSearchTerms) {
       logger.info(`Using custom search terms: "${effectiveSearchTitle}" (original: "${audiobook.title}")`);
+    } else if (effectiveSearchTitle !== audiobook.title) {
+      logger.info(`Using cleaned search title: "${effectiveSearchTitle}" (original: "${audiobook.title}")`);
     }
 
     // Get ebook configuration

@@ -5,7 +5,8 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { AudiobookGrid } from '@/components/audiobooks/AudiobookGrid';
 import { LoadMoreBar } from '@/components/ui/LoadMoreBar';
@@ -14,10 +15,17 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { SectionToolbar } from '@/components/ui/SectionToolbar';
 import { usePreferences } from '@/contexts/PreferencesContext';
 
-export default function SearchPage() {
-  const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
+function SearchPageContent() {
+  const searchParams = useSearchParams();
+  const queryParam = searchParams.get('q') || '';
+  const [query, setQuery] = useState(queryParam);
+  const [debouncedQuery, setDebouncedQuery] = useState(queryParam);
   const { cardSize, setCardSize, squareCovers, setSquareCovers, hideAvailable, setHideAvailable } = usePreferences();
+
+  useEffect(() => {
+    setQuery(queryParam);
+    setDebouncedQuery(queryParam);
+  }, [queryParam]);
 
   // Debounce search query
   useEffect(() => {
@@ -60,7 +68,7 @@ export default function SearchPage() {
           Search Books
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Find and request any audiobook from Audible
+            Find and request any audiobook or book
           </p>
         </div>
 
@@ -86,7 +94,7 @@ export default function SearchPage() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by title, author, or narrator..."
+              placeholder="Search audiobooks and books by title, author, or narrator..."
               className="w-full pl-12 pr-12 py-4 text-lg border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400"
               autoFocus
             />
@@ -175,15 +183,23 @@ export default function SearchPage() {
               />
             </svg>
             <p className="text-xl text-gray-600 dark:text-gray-400">
-              Start typing to search for audiobooks
+              Start typing to search for audiobooks and books
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-500">
-              Search by title, author, or narrator name
+              Search by title, author, or narrator name for audiobooks and books
             </p>
           </div>
         )}
       </main>
       </div>
     </ProtectedRoute>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense>
+      <SearchPageContent />
+    </Suspense>
   );
 }

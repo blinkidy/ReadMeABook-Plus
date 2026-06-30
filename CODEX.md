@@ -35,13 +35,21 @@
 
 ## UI Changes Added
 - `src/components/audiobooks/AudiobookCard.tsx`
-  - Added request format selector: Audiobook / EPUB.
-  - Calls request API with selected `mediaType`.
-  - Only updates local audiobook status for audiobook requests.
+  - Request format selector removed from hover overlay for touch-first use.
+  - Cards now open details; format selection/request actions live in `AudiobookDetailsModal`.
 - `src/components/audiobooks/AudiobookDetailsModal.tsx`
   - Added format segmented control before the request action.
   - Shows EPUB vs Audiobook success messaging.
   - Only updates local audiobook status for audiobook requests.
+- `src/components/layout/Header.tsx`
+  - Added authenticated top search bar that navigates to `/search?q=...`.
+- Search/author/series pages use broader audiobook/book language.
+
+## Search Quality
+- `src/lib/utils/search-title.ts`
+  - Cleans known promotional Audible subtitle suffixes before automatic indexer search.
+  - Example: `Yesteryear: A GMA Book Club Pick` searches as `Yesteryear`.
+- Audiobook and EPUB automatic search paths use cleaned titles unless custom search terms are set.
 - `src/lib/hooks/useRequests.ts`
   - `createRequest()` accepts `mediaType`.
   - User-facing "already processing" message differentiates EPUB.
