@@ -184,7 +184,9 @@ describe('Notification Triggers - Integration Tests', () => {
         'req-1',
         'Test Book',
         'Test Author',
-        'testuser'
+        'testuser',
+        undefined,
+        'audiobook'
       );
       expect(jobQueueMock.addSearchJob).toHaveBeenCalled(); // Search triggered
     });
