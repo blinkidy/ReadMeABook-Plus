@@ -61,6 +61,7 @@ export function AudiobookCard({
   const [localRequestStatus, setLocalRequestStatus] = useState<string | undefined>(undefined);
   const [localIsIgnored, setLocalIsIgnored] = useState<boolean | undefined>(undefined);
   const [coverError, setCoverError] = useState(false);
+  const [requestFormat, setRequestFormat] = useState<'audiobook' | 'epub'>('audiobook');
 
   // Build a display-only audiobook with local overrides
   const displayAudiobook = localRequestStatus !== undefined
@@ -72,14 +73,16 @@ export function AudiobookCard({
   const handleRequest = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user) {
-      setError('Please log in to request audiobooks');
+      setError('Please log in to request books');
       setTimeout(() => setError(null), 3000);
       return;
     }
 
     try {
-      await createRequest(audiobook);
-      setLocalRequestStatus('pending');
+      await createRequest(audiobook, { mediaType: requestFormat });
+      if (requestFormat === 'audiobook') {
+        setLocalRequestStatus('pending');
+      }
       setShowToast(true);
       setTimeout(() => setShowToast(false), 2500);
       onRequestSuccess?.();
@@ -150,28 +153,40 @@ export function AudiobookCard({
               <div className="absolute inset-x-0 bottom-0 p-4 flex flex-col gap-2">
                 {/* Quick Action Button */}
                 {canRequest ? (
-                  <button
-                    onClick={handleRequest}
-                    disabled={isLoading || !user}
-                    className={`
-                      w-full py-2.5 px-4 rounded-xl font-semibold text-sm
-                      backdrop-blur-md transition-all duration-200
-                      ${isLoading
-                        ? 'bg-white/20 text-white/70 cursor-wait'
-                        : 'bg-white text-gray-900 hover:bg-blue-500 hover:text-white hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.98]'
-                      }
-                    `}
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                        Requesting...
-                      </span>
-                    ) : !user ? 'Sign in to Request' : 'Request'}
-                  </button>
+                  <>
+                    <select
+                      value={requestFormat}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setRequestFormat(e.target.value as 'audiobook' | 'epub')}
+                      className="w-full rounded-xl bg-white/90 px-3 py-2 text-sm font-medium text-gray-900 backdrop-blur-md outline-none"
+                      aria-label="Request format"
+                    >
+                      <option value="audiobook">Audiobook</option>
+                      <option value="epub">EPUB</option>
+                    </select>
+                    <button
+                      onClick={handleRequest}
+                      disabled={isLoading || !user}
+                      className={`
+                        w-full py-2.5 px-4 rounded-xl font-semibold text-sm
+                        backdrop-blur-md transition-all duration-200
+                        ${isLoading
+                          ? 'bg-white/20 text-white/70 cursor-wait'
+                          : 'bg-white text-gray-900 hover:bg-blue-500 hover:text-white hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/25 active:scale-[0.98]'
+                        }
+                      `}
+                    >
+                      {isLoading ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          Requesting...
+                        </span>
+                      ) : !user ? 'Sign in to Request' : `Request ${requestFormat === 'epub' ? 'EPUB' : 'Audiobook'}`}
+                    </button>
+                  </>
                 ) : status?.type === 'available' ? (
                   <div className="w-full py-2.5 px-4 rounded-xl font-semibold text-sm text-center bg-emerald-500 text-white backdrop-blur-md shadow-lg shadow-emerald-500/25">
                     In Your Library

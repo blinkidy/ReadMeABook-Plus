@@ -586,7 +586,7 @@ export function RecentRequestsTable({ ebookSidecarEnabled = false, annasArchiveB
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {hasActiveFilters
               ? 'Try adjusting your filters or search terms.'
-              : 'No audiobook requests have been made yet.'}
+                    : 'No book requests have been made yet.'}
           </p>
         </div>
       ) : (

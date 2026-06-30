@@ -819,7 +819,7 @@ function AdminUsersPageContent() {
             About User Management
           </h3>
           <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-            <li>• <strong>User:</strong> Can request audiobooks, view own requests, and search the catalog</li>
+                    <li>• <strong>User:</strong> Can request books, view own requests, and search the catalog</li>
             <li>• <strong>Admin:</strong> Full system access including settings, user management, and all requests</li>
             <li>• <strong>Setup Admin:</strong> The initial admin account — protected, cannot be changed or deleted</li>
             <li>• <strong>Permissions:</strong> Click a user&apos;s permission badge to manage individual settings. Use Global User Permissions for system-wide defaults. Admins always have full access.</li>
@@ -894,7 +894,7 @@ function AdminUsersPageContent() {
                       <div className="flex-1">
                         <div className="text-sm font-medium text-gray-900 dark:text-gray-100">User</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          Can request audiobooks and view own requests
+                          Can request books and view own requests
                         </div>
                       </div>
                     </label>

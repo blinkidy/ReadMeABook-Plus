@@ -110,6 +110,7 @@ export interface DownloadClientSettings {
 export interface PathsSettings {
   downloadDir: string;
   mediaDir: string;
+  bookOrbitIngestPath?: string;
   audiobookPathTemplate?: string;
   ebookPathTemplate?: string;
   metadataTaggingEnabled: boolean;

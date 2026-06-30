@@ -108,6 +108,7 @@ export function AudiobookDetailsModal({
   const [isDownloading, setIsDownloading] = useState(false);
   const [coverError, setCoverError] = useState(false);
   const [isTogglingIgnore, setIsTogglingIgnore] = useState(false);
+  const [requestFormat, setRequestFormat] = useState<'audiobook' | 'epub'>('audiobook');
 
   // Sync local status when the prop changes (e.g. page data refreshes)
   useEffect(() => {
@@ -142,15 +143,17 @@ export function AudiobookDetailsModal({
 
   const handleRequest = async () => {
     if (!user || !audiobook) {
-      showNotification('Please log in to request audiobooks', 'error');
+      showNotification('Please log in to request books', 'error');
       return;
     }
 
     try {
-      await createRequest(audiobook);
-      setLocalRequestStatus('pending');
-      onStatusChange?.('pending');
-      showNotification('Request created!');
+      await createRequest(audiobook, { mediaType: requestFormat });
+      if (requestFormat === 'audiobook') {
+        setLocalRequestStatus('pending');
+        onStatusChange?.('pending');
+      }
+      showNotification(`${requestFormat === 'epub' ? 'EPUB' : 'Audiobook'} request created!`);
       setTimeout(onClose, 1500);
       onRequestSuccess?.();
     } catch (err) {
@@ -160,7 +163,7 @@ export function AudiobookDetailsModal({
 
   const handleInteractiveSearch = () => {
     if (!user || !audiobook) {
-      showNotification('Please log in to request audiobooks', 'error');
+      showNotification('Please log in to request books', 'error');
       return;
     }
     setShowInteractiveSearch(true);
@@ -638,6 +641,32 @@ export function AudiobookDetailsModal({
             <div className="flex items-center gap-3">
               {/* Main Action */}
               <div className="flex-1">
+                {status.canRequest && (
+                  <div className="mb-2 grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
+                    <button
+                      type="button"
+                      onClick={() => setRequestFormat('audiobook')}
+                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                        requestFormat === 'audiobook'
+                          ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
+                          : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                      }`}
+                    >
+                      Audiobook
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRequestFormat('epub')}
+                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                        requestFormat === 'epub'
+                          ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
+                          : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                      }`}
+                    >
+                      EPUB
+                    </button>
+                  </div>
+                )}
                 {status.type === 'available' ? (
                   <button
                     disabled
@@ -659,7 +688,7 @@ export function AudiobookDetailsModal({
                         </svg>
                         Requesting...
                       </span>
-                    ) : !user ? 'Sign in to Request' : 'Request Audiobook'}
+                    ) : !user ? 'Sign in to Request' : `Request ${requestFormat === 'epub' ? 'EPUB' : 'Audiobook'}`}
                   </button>
                 ) : (
                   <button

@@ -1008,6 +1008,34 @@ export async function getFileOrganizer(): Promise<FileOrganizer> {
 }
 
 /**
+ * Get FileOrganizer instance for ebook imports.
+ * Uses the independent BookOrbit ingest path when configured.
+ */
+export async function getEbookFileOrganizer(): Promise<FileOrganizer> {
+  const [ebookConfig, mediaConfig] = await Promise.all([
+    prisma.configuration.findUnique({ where: { key: 'ebook_bookorbit_ingest_path' } }),
+    prisma.configuration.findUnique({ where: { key: 'media_dir' } }),
+  ]);
+
+  const mediaDir =
+    ebookConfig?.value ||
+    process.env.BOOKORBIT_INGEST_PATH ||
+    mediaConfig?.value ||
+    process.env.MEDIA_DIR ||
+    '/media/audiobooks';
+  const tempDir = process.env.TEMP_DIR || '/tmp/readmeabook';
+
+  const { getConfigService } = await import('../services/config.service');
+  const configService = getConfigService();
+  const fileChmodStr = await configService.get('file_chmod') || '664';
+  const dirChmodStr = await configService.get('dir_chmod') || '775';
+  const fileMode = parseInt(fileChmodStr, 8);
+  const dirMode = parseInt(dirChmodStr, 8);
+
+  return new FileOrganizer(mediaDir, tempDir, fileMode, dirMode);
+}
+
+/**
  * Build audiobook path using template-based path building
  * Standalone function for use by other modules (e.g., fetch-ebook route, request-delete service)
  *

@@ -174,7 +174,10 @@ export function useCreateRequest() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const createRequest = async (audiobook: Audiobook, options?: { skipAutoSearch?: boolean }) => {
+  const createRequest = async (
+    audiobook: Audiobook,
+    options?: { skipAutoSearch?: boolean; mediaType?: 'audiobook' | 'epub' }
+  ) => {
     if (!accessToken) {
       throw new Error('Not authenticated');
     }
@@ -189,7 +192,7 @@ export function useCreateRequest() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ audiobook }),
+        body: JSON.stringify({ audiobook, mediaType: options?.mediaType || 'audiobook' }),
       });
 
       const data = await response.json();
@@ -197,7 +200,9 @@ export function useCreateRequest() {
       if (!response.ok) {
         // Handle specific error types with custom messages
         if (data.error === 'BeingProcessed') {
-          throw new Error('This audiobook is being processed. It will be available in your library soon.');
+          throw new Error(options?.mediaType === 'epub'
+            ? 'This EPUB is already being processed.'
+            : 'This audiobook is being processed. It will be available in your library soon.');
         }
         if (data.error === 'AlreadyAvailable') {
           throw new Error('This audiobook is already in your Plex library.');

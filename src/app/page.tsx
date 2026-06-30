@@ -28,7 +28,7 @@ const RELEASE_SCROLL_KEYS = new Set([
 ]);
 
 function getSectionTitle(sectionType: string, categoryName?: string | null): string {
-  if (sectionType === 'popular') return 'Popular Audiobooks';
+  if (sectionType === 'popular') return 'Popular Books';
   if (sectionType === 'new_releases') return 'New Releases';
   return categoryName || 'Category';
 }
@@ -261,13 +261,13 @@ export default function HomePage() {
               Can't find what you're looking for?
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Use our search to find any audiobook from Audible
+              Use our search to find books from Audible
             </p>
             <a
               href="/search"
               className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
             >
-              Search Audiobooks
+              Search Books
             </a>
           </section>
         </main>
@@ -276,7 +276,7 @@ export default function HomePage() {
         <footer ref={footerRef} className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-16">
           <div className="container mx-auto px-4 py-6 max-w-7xl">
             <div className="text-center text-sm text-gray-600 dark:text-gray-400">
-              <p>ReadMeABook - Audiobook Library Management System</p>
+              <p>ReadMeABook - Book Request Management System</p>
             </div>
           </div>
         </footer>

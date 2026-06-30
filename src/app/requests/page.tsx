@@ -303,7 +303,7 @@ export default function RequestsPage() {
             </div>
             <div className="space-y-1.5">
               <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Authentication Required</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Please log in to view your audiobook requests</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Please log in to view your book requests</p>
             </div>
           </div>
         </main>
@@ -324,7 +324,7 @@ export default function RequestsPage() {
             My Requests
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Track the status of your audiobook requests in real-time
+            Track the status of your book requests in real-time
           </p>
         </div>
 

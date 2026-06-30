@@ -25,6 +25,7 @@ const CreateRequestSchema = z.object({
     releaseDate: z.string().optional(),
     rating: z.number().nullable().optional(),
   }),
+  mediaType: z.enum(['audiobook', 'epub']).optional().default('audiobook'),
 });
 
 /**
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
       }
 
       const body = await req.json();
-      const { audiobook } = CreateRequestSchema.parse(body);
+      const { audiobook, mediaType } = CreateRequestSchema.parse(body);
 
       const skipAutoSearch = req.nextUrl.searchParams.get('skipAutoSearch') === 'true';
 
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
         narrator: audiobook.narrator,
         description: audiobook.description,
         coverArtUrl: audiobook.coverArtUrl,
-      }, { skipAutoSearch, bypassIgnore: true });
+      }, { skipAutoSearch, bypassIgnore: true, mediaType });
 
       if (!result.success) {
         const statusMap: Record<string, { error: string; status: number }> = {
@@ -88,10 +89,10 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json(
-        {
-          error: 'RequestError',
-          message: 'Failed to create audiobook request',
-        },
+          {
+            error: 'RequestError',
+            message: 'Failed to create request',
+          },
         { status: 500 }
       );
     }

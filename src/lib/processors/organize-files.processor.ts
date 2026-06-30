@@ -5,7 +5,7 @@
 
 import { OrganizeFilesPayload, getJobQueueService } from '../services/job-queue.service';
 import { prisma } from '../db';
-import { getFileOrganizer } from '../utils/file-organizer';
+import { getEbookFileOrganizer, getFileOrganizer } from '../utils/file-organizer';
 import { RMABLogger } from '../utils/logger';
 import { getLibraryService } from '../services/library';
 import { getConfigService } from '../services/config.service';
@@ -711,7 +711,7 @@ async function processEbookOrganization(
   logger.info(`Download source: ${downloadHistory?.downloadClient || 'unknown'} (indexer download: ${isIndexerDownload})`);
 
   // Get file organizer and ebook-specific template (falls back to audiobook template)
-  const organizer = await getFileOrganizer();
+  const organizer = await getEbookFileOrganizer();
   const ebookTemplateConfig = await prisma.configuration.findUnique({
     where: { key: 'ebook_path_template' },
   });

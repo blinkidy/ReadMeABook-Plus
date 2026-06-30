@@ -41,6 +41,7 @@ export function usePathsSettings({ paths, onChange, onValidationChange }: UsePat
         body: JSON.stringify({
           downloadDir: paths.downloadDir,
           mediaDir: paths.mediaDir,
+          bookOrbitIngestPath: paths.bookOrbitIngestPath,
           audiobookPathTemplate: paths.audiobookPathTemplate,
           ebookPathTemplate: paths.ebookPathTemplate,
         }),

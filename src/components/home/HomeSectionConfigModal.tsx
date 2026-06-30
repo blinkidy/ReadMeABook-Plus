@@ -28,7 +28,7 @@ const SECTION_COLORS = [
 ];
 
 function getSectionLabel(section: { sectionType: string; categoryName?: string | null }) {
-  if (section.sectionType === 'popular') return 'Popular Audiobooks';
+  if (section.sectionType === 'popular') return 'Popular Books';
   if (section.sectionType === 'new_releases') return 'New Releases';
   return section.categoryName || 'Category';
 }
