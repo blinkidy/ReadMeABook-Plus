@@ -13,6 +13,7 @@ Ebooks are first-class citizens in RMAB, with their own request type, tracking, 
 - **Terminal State:** `available` after ebook file organization into BookOrbit
 - **UI Badge:** Orange (#f16f19) ebook badge to distinguish from audiobooks
 - **Separate Tracking:** Own progress, status, and error handling
+- **Format-aware modal actions:** Details modal offers only missing formats (`Request Audiobook` for ebook-only ownership, `Request EPUB` for audiobook-only ownership, `Both` when neither exists, no request action when both exist).
 
 ### Source Priority
 1. **Anna's Archive** (if enabled) - Direct HTTP downloads
@@ -89,6 +90,7 @@ Scheduled `bookorbit_library_scan` job (every 6 hours, enabled by default):
 - Uses ASIN from path/filename when present; otherwise normalized title/author matching against `AudibleCache`
 - Marks matching first-class ebook requests `available` by ASIN, normalized title+author, or normalized title when BookOrbit author is unknown
 - Search availability also treats unique title-only `bookorbit://` matches as available when author metadata is missing
+- BookOrbit matches count as ebook availability only; they do not block audiobook requests.
 - Does not move, delete, or modify BookOrbit files
 
 ### Kindle EPUB Fix

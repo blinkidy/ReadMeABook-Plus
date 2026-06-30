@@ -43,6 +43,8 @@
   - Added format segmented control before the request action.
   - Shows EPUB vs Audiobook success messaging.
   - Only updates local audiobook status for audiobook requests.
+  - Request actions are format-aware: ebook-only availability offers `Request Audiobook`, audiobook-only availability offers `Request EPUB`, both-missing shows Audiobook/EPUB/Both choices, and both-available shows no request action.
+  - `Both` is a UI convenience that creates one audiobook request and one EPUB request through the existing request API.
 - `src/components/layout/Header.tsx`
   - Added authenticated top search bar that navigates to `/search?q=...`.
 - Search/author/series pages use broader audiobook/book language.
@@ -66,8 +68,14 @@
 - `src/app/api/requests/route.ts`
   - POST schema accepts `mediaType`.
   - Passes media type to request creation service.
+- `src/app/api/audiobooks/[asin]/ebook-status/route.ts`
+  - Returns separate `audiobookAvailable` and `ebookAvailable` flags for details-modal actions.
 - `src/lib/services/request-creator.service.ts`
   - Central first-class EPUB request behavior.
+  - Audiobook availability checks exclude BookOrbit rows so ebook-only ownership does not block requesting the audiobook.
+- `src/lib/services/shelf-sync-core.service.ts`
+  - Hardcover/Goodreads auto-request shelves default to audiobooks, but exact shelf name `Want To Own Books` creates EPUB requests.
+  - Exact shelf name `Want To Own Audiobooks` remains the normal audiobook request path.
 - `src/app/api/requests/[id]/select-ebook/route.ts`
   - Allows first-class ebook requests without `parentRequestId`.
   - Keeps sidecar ebook selection behavior for parent audiobook requests.

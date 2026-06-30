@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, AuthenticatedRequest } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/db';
 import { RMABLogger } from '@/lib/utils/logger';
+import { findBookOrbitMatch } from '@/lib/utils/audiobook-matcher';
 
 const logger = RMABLogger.create('API.Audiobooks.EbookStatus');
 
@@ -26,7 +27,7 @@ const ACTIVE_EBOOK_STATUSES = [
 
 /**
  * GET /api/audiobooks/[asin]/ebook-status
- * Returns whether ebook sources are enabled and if an active ebook request exists
+ * Returns format-aware availability and whether an active ebook request exists.
  */
 export async function GET(
   request: NextRequest,
@@ -56,50 +57,132 @@ export async function GET(
       const isIndexerSearchEnabled = indexerSearchConfig?.value === 'true';
       const ebookSourcesEnabled = isAnnasArchiveEnabled || isIndexerSearchEnabled;
 
-      // If no ebook sources enabled, return early
-      if (!ebookSourcesEnabled) {
-        return NextResponse.json({
-          ebookSourcesEnabled: false,
-          hasActiveEbookRequest: false,
-          existingEbookStatus: null,
-        });
-      }
-
       // Find the audiobook by ASIN
       const audiobook = await prisma.audiobook.findFirst({
         where: { audibleAsin: asin },
-        select: { id: true },
+        select: { id: true, title: true, author: true, narrator: true },
+      });
+
+      const cachedAudiobook = audiobook ? null : await prisma.audibleCache.findUnique({
+        where: { asin },
+        select: { title: true, author: true, narrator: true },
       });
 
       if (!audiobook) {
-        // Audiobook not in database - that's fine, just no ebook request possible
+        const [audioLibraryMatch, bookOrbitMatch] = await Promise.all([
+          prisma.plexLibrary.findFirst({
+            where: {
+              plexLibraryId: { not: 'bookorbit' },
+              OR: [
+                { asin },
+                { plexGuid: { contains: asin } },
+              ],
+            },
+            select: { plexGuid: true },
+          }),
+          cachedAudiobook
+            ? findBookOrbitMatch({
+                asin,
+                title: cachedAudiobook.title,
+                author: cachedAudiobook.author,
+                narrator: cachedAudiobook.narrator || undefined,
+              })
+            : prisma.plexLibrary.findFirst({
+                where: {
+                  plexLibraryId: 'bookorbit',
+                  OR: [
+                    { asin },
+                    { plexGuid: { contains: asin } },
+                  ],
+                },
+                select: {
+                  plexGuid: true,
+                  plexRatingKey: true,
+                  title: true,
+                  author: true,
+                },
+              }),
+        ]);
+
         return NextResponse.json({
-          ebookSourcesEnabled: true,
+          ebookSourcesEnabled,
           hasActiveEbookRequest: false,
           existingEbookStatus: null,
+          existingEbookRequestId: null,
+          ebookAvailable: !!bookOrbitMatch,
+          audiobookAvailable: !!audioLibraryMatch,
+          hasActiveAudiobookRequest: false,
+          existingAudiobookStatus: null,
         });
       }
 
-      // Check for any active ebook request for this audiobook
-      const existingEbookRequest = await prisma.request.findFirst({
-        where: {
-          audiobookId: audiobook.id,
-          type: 'ebook',
-          deletedAt: null,
-          status: { in: ACTIVE_EBOOK_STATUSES },
-        },
-        select: {
-          id: true,
-          status: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+      const [
+        existingEbookRequest,
+        existingAudiobookRequest,
+        audioLibraryMatch,
+        bookOrbitMatch,
+      ] = await Promise.all([
+        // Check for any active ebook request for this audiobook
+        prisma.request.findFirst({
+          where: {
+            audiobookId: audiobook.id,
+            type: 'ebook',
+            deletedAt: null,
+            status: { in: ACTIVE_EBOOK_STATUSES },
+          },
+          select: {
+            id: true,
+            status: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.request.findFirst({
+          where: {
+            audiobookId: audiobook.id,
+            type: 'audiobook',
+            deletedAt: null,
+            status: { in: ACTIVE_EBOOK_STATUSES },
+          },
+          select: {
+            id: true,
+            status: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.plexLibrary.findFirst({
+          where: {
+            plexLibraryId: { not: 'bookorbit' },
+            OR: [
+              { asin },
+              { plexGuid: { contains: asin } },
+            ],
+          },
+          select: { plexGuid: true },
+        }),
+        findBookOrbitMatch({
+          asin,
+          title: audiobook.title,
+          author: audiobook.author,
+          narrator: audiobook.narrator || undefined,
+        }),
+      ]);
+
+      const ebookAvailable = !!bookOrbitMatch ||
+        existingEbookRequest?.status === 'available' ||
+        existingEbookRequest?.status === 'downloaded';
+      const audiobookAvailable = !!audioLibraryMatch ||
+        existingAudiobookRequest?.status === 'available' ||
+        existingAudiobookRequest?.status === 'downloaded';
 
       return NextResponse.json({
-        ebookSourcesEnabled: true,
+        ebookSourcesEnabled,
         hasActiveEbookRequest: !!existingEbookRequest,
         existingEbookStatus: existingEbookRequest?.status || null,
         existingEbookRequestId: existingEbookRequest?.id || null,
+        ebookAvailable,
+        audiobookAvailable,
+        hasActiveAudiobookRequest: !!existingAudiobookRequest,
+        existingAudiobookStatus: existingAudiobookRequest?.status || null,
       });
 
     } catch (error) {

@@ -41,6 +41,7 @@ vi.mock('@/lib/services/config.service', () => ({
 
 vi.mock('@/lib/utils/audiobook-matcher', () => ({
   findPlexMatch: vi.fn(),
+  findBookOrbitMatch: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@/lib/services/audiobookshelf/api', () => ({

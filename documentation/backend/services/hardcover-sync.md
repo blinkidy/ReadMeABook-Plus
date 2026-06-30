@@ -59,6 +59,7 @@ Syncs user-subscribed Hardcover lists via their GraphQL API, resolves books to A
 - **Immediate sync:** POST and PATCH trigger `addSyncShelvesJob()` with unlimited lookups
 - **Scheduled sync:** Runs via `sync_reading_shelves` job (default: max 10 lookups/shelf/cycle)
 - **Cover data:** Stores top 8 books as JSON in `coverUrls` field for shelf card display
+- **Media intent:** List name `Want To Own Books` creates EPUB requests; `Want To Own Audiobooks` and other lists create audiobook requests.
 
 ## Related
 - [Shelf sync core (shared logic)](goodreads-sync.md#shared-sync-core)

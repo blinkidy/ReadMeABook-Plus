@@ -43,6 +43,7 @@ export interface ShelfSyncOptions {
   maxLookupsPerShelf?: number;
 }
 
+type ShelfRequestMediaType = 'audiobook' | 'epub';
 type LoggerType = ReturnType<typeof RMABLogger.forJob> | ReturnType<typeof RMABLogger.create>;
 
 export function createEmptyStats(): ShelfSyncStats {
@@ -61,6 +62,11 @@ export function resolveMaxLookups(options: ShelfSyncOptions): number {
   return options.maxLookupsPerShelf ?? DEFAULT_MAX_LOOKUPS_PER_SHELF;
 }
 
+export function resolveShelfRequestMediaType(shelfName: string): ShelfRequestMediaType {
+  const normalized = shelfName.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+  return normalized === 'want to own books' ? 'epub' : 'audiobook';
+}
+
 /**
  * Process a list of books from any provider: resolve to ASINs, create requests,
  * enrich covers, and return book data for shelf metadata.
@@ -74,6 +80,7 @@ export async function processShelfBooks(
   log: LoggerType,
   maxLookups: number,
   autoRequest: boolean = true,
+  requestMediaType: ShelfRequestMediaType = 'audiobook',
 ): Promise<{ coverUrl: string; asin: string | null; title: string; author: string }[]> {
   stats.booksFound += books.length;
 
@@ -120,11 +127,11 @@ export async function processShelfBooks(
           title: mapping.title,
           author: mapping.author,
           coverArtUrl: mapping.coverUrl || undefined,
-        });
+        }, { mediaType: requestMediaType });
 
         if (result.success) {
           stats.requestsCreated++;
-          log.info(`Created request for "${mapping.title}" by ${mapping.author} (ASIN: ${mapping.audibleAsin})`);
+          log.info(`Created ${requestMediaType === 'epub' ? 'EPUB' : 'audiobook'} request for "${mapping.title}" by ${mapping.author} (ASIN: ${mapping.audibleAsin})`);
         }
       } catch (error) {
         log.error(`Failed to create request for "${mapping.title}": ${error instanceof Error ? error.message : 'Unknown error'}`);

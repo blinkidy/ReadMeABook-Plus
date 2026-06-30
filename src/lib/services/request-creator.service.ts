@@ -10,7 +10,7 @@
 import { prisma } from '@/lib/db';
 import { getJobQueueService } from '@/lib/services/job-queue.service';
 import { getConfigService } from '@/lib/services/config.service';
-import { findBookOrbitMatch, findPlexMatch } from '@/lib/utils/audiobook-matcher';
+import { findBookOrbitMatch } from '@/lib/utils/audiobook-matcher';
 import { getAudibleService } from '@/lib/integrations/audible.service';
 import { RMABLogger } from '@/lib/utils/logger';
 import { shouldSkipAutoSearch } from '@/lib/utils/release-date';
@@ -73,15 +73,21 @@ export async function createRequestForUser(
       };
     }
 
-    // Check if audiobook is already in Plex/ABS library
-    const plexMatch = await findPlexMatch({
-      asin: audiobook.asin,
-      title: audiobook.title,
-      author: audiobook.author,
-      narrator: audiobook.narrator,
+    // Check if audiobook is already in the audio library. BookOrbit ebook
+    // matches are intentionally excluded so ebook-only ownership can still
+    // request the audiobook.
+    const audioLibraryMatch = await prisma.plexLibrary.findFirst({
+      where: {
+        plexLibraryId: { not: 'bookorbit' },
+        OR: [
+          { asin: audiobook.asin },
+          { plexGuid: { contains: audiobook.asin } },
+        ],
+      },
+      select: { plexGuid: true },
     });
 
-    if (plexMatch) {
+    if (audioLibraryMatch) {
       return {
         success: false,
         reason: 'already_available',

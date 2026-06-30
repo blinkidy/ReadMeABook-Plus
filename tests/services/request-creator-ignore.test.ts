@@ -27,7 +27,6 @@ vi.mock('@/lib/utils/logger', () => ({
   },
 }));
 
-// Mock findPlexMatch to return null (not in library)
 vi.mock('@/lib/utils/audiobook-matcher', () => ({
   findPlexMatch: vi.fn().mockResolvedValue(null),
   findBookOrbitMatch: vi.fn().mockResolvedValue(null),
@@ -87,6 +86,7 @@ describe('createRequestForUser — ignore list', () => {
 
     // Default: no existing requests, no library matches
     prismaMock.request.findFirst.mockResolvedValue(null);
+    prismaMock.plexLibrary.findFirst.mockResolvedValue(null);
     prismaMock.audiobook.findFirst.mockResolvedValue(null);
     prismaMock.audiobook.create.mockResolvedValue({
       id: 'audiobook-1',
@@ -195,15 +195,27 @@ describe('createRequestForUser — ignore list', () => {
     expect(prismaMock.request.create).toHaveBeenCalled();
   });
 
+  it('checks only non-BookOrbit rows before blocking audiobook requests as available', async () => {
+    const { createRequestForUser } = await import('@/lib/services/request-creator.service');
+    const result = await createRequestForUser(TEST_USER_ID, TEST_AUDIOBOOK, {
+      mediaType: 'audiobook',
+      bypassIgnore: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(prismaMock.plexLibrary.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          plexLibraryId: { not: 'bookorbit' },
+        }),
+      })
+    );
+  });
+
   it('creates first-class EPUB requests without blocking on audiobook library availability', async () => {
-    const { findPlexMatch } = await import('@/lib/utils/audiobook-matcher');
-    vi.mocked(findPlexMatch).mockResolvedValueOnce({
+    prismaMock.plexLibrary.findFirst.mockResolvedValueOnce({
       plexGuid: 'plex://existing-audiobook',
-      plexTitle: 'Test Book',
-      plexAuthor: 'Test Author',
-      confidence: 100,
-      matchType: 'asin_exact_field',
-    } as any);
+    });
 
     const { createRequestForUser } = await import('@/lib/services/request-creator.service');
     const result = await createRequestForUser(TEST_USER_ID, TEST_AUDIOBOOK, {
@@ -265,6 +277,7 @@ describe('createRequestForUser — release-date gate', () => {
     jobQueueAddSearchEbookJob.mockResolvedValue(undefined);
     jobQueueAddNotificationJob.mockResolvedValue(undefined);
     prismaMock.request.findFirst.mockResolvedValue(null);
+    prismaMock.plexLibrary.findFirst.mockResolvedValue(null);
     prismaMock.audiobook.findFirst.mockResolvedValue(null);
     prismaMock.audiobook.create.mockResolvedValue({
       id: 'audiobook-1',

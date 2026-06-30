@@ -11,8 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const useAuthMock = vi.hoisted(() => vi.fn());
 const useAudiobookDetailsMock = vi.hoisted(() => vi.fn());
+const useEbookStatusMock = vi.hoisted(() => vi.fn());
 const createRequestMock = vi.hoisted(() => vi.fn());
-const fetchEbookMock = vi.hoisted(() => vi.fn());
 const revalidateEbookStatusMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/contexts/AuthContext', () => ({
@@ -29,12 +29,8 @@ vi.mock('@/lib/hooks/useAudiobooks', () => ({
 
 vi.mock('@/lib/hooks/useRequests', () => ({
   useCreateRequest: () => ({ createRequest: createRequestMock, isLoading: false }),
-  useEbookStatus: () => ({
-    ebookStatus: { ebookSourcesEnabled: false, hasActiveEbookRequest: false },
-    revalidate: revalidateEbookStatusMock,
-  }),
+  useEbookStatus: () => useEbookStatusMock(),
   useDownloadStatus: () => ({ downloadAvailable: false, requestId: null }),
-  useFetchEbookByAsin: () => ({ fetchEbook: fetchEbookMock, isLoading: false }),
 }));
 
 vi.mock('@/components/requests/InteractiveTorrentSearchModal', () => ({
@@ -67,7 +63,12 @@ describe('AudiobookDetailsModal', () => {
       isLoading: false,
       error: null,
     });
+    useEbookStatusMock.mockReturnValue({
+      ebookStatus: null,
+      revalidate: revalidateEbookStatusMock,
+    });
     createRequestMock.mockReset();
+    revalidateEbookStatusMock.mockReset();
     Object.assign(navigator, {
       clipboard: {
         writeText: vi.fn().mockResolvedValue(undefined),
@@ -137,6 +138,51 @@ describe('AudiobookDetailsModal', () => {
     vi.useRealTimers();
   });
 
+  it('creates audiobook and EPUB requests when Both is selected', async () => {
+    vi.useFakeTimers();
+    useEbookStatusMock.mockReturnValue({
+      ebookStatus: {
+        ebookSourcesEnabled: true,
+        hasActiveEbookRequest: false,
+        existingEbookStatus: null,
+        existingEbookRequestId: null,
+        ebookAvailable: false,
+        audiobookAvailable: false,
+        hasActiveAudiobookRequest: false,
+        existingAudiobookStatus: null,
+      },
+      revalidate: revalidateEbookStatusMock,
+    });
+    createRequestMock.mockResolvedValue(undefined);
+    const onClose = vi.fn();
+    const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
+
+    render(
+      <AudiobookDetailsModal
+        asin="ASIN123"
+        isOpen={true}
+        onClose={onClose}
+      />
+    );
+
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: 'Both' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Request Both' }));
+    });
+
+    expect(createRequestMock).toHaveBeenNthCalledWith(1, audiobookDetails, { mediaType: 'audiobook' });
+    expect(createRequestMock).toHaveBeenNthCalledWith(2, audiobookDetails, { mediaType: 'epub' });
+    expect(screen.getByText(/Audiobook and EPUB request created!/)).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(onClose).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it('copies the ASIN to the clipboard', async () => {
     const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
 
@@ -193,6 +239,97 @@ describe('AudiobookDetailsModal', () => {
     // Status badge and button both show "In Your Library"
     expect(screen.getAllByText('In Your Library').length).toBeGreaterThan(0);
     expect(screen.queryByTitle('Interactive Search')).toBeNull();
+  });
+
+  it('offers audiobook request when only the ebook is available', async () => {
+    useEbookStatusMock.mockReturnValue({
+      ebookStatus: {
+        ebookSourcesEnabled: true,
+        hasActiveEbookRequest: false,
+        existingEbookStatus: 'available',
+        existingEbookRequestId: 'ebook-1',
+        ebookAvailable: true,
+        audiobookAvailable: false,
+        hasActiveAudiobookRequest: false,
+        existingAudiobookStatus: null,
+      },
+      revalidate: revalidateEbookStatusMock,
+    });
+    const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
+
+    render(
+      <AudiobookDetailsModal
+        asin="ASIN123"
+        isOpen={true}
+        onClose={vi.fn()}
+        isAvailable={true}
+      />
+    );
+
+    await act(async () => {});
+    expect(screen.getByRole('button', { name: 'Request Audiobook' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Request EPUB' })).toBeNull();
+  });
+
+  it('offers EPUB request when only the audiobook is available', async () => {
+    useEbookStatusMock.mockReturnValue({
+      ebookStatus: {
+        ebookSourcesEnabled: true,
+        hasActiveEbookRequest: false,
+        existingEbookStatus: null,
+        existingEbookRequestId: null,
+        ebookAvailable: false,
+        audiobookAvailable: true,
+        hasActiveAudiobookRequest: true,
+        existingAudiobookStatus: 'available',
+      },
+      revalidate: revalidateEbookStatusMock,
+    });
+    const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
+
+    render(
+      <AudiobookDetailsModal
+        asin="ASIN123"
+        isOpen={true}
+        onClose={vi.fn()}
+        isAvailable={true}
+      />
+    );
+
+    await act(async () => {});
+    expect(screen.getByRole('button', { name: 'Request EPUB' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Request Audiobook' })).toBeNull();
+  });
+
+  it('hides request options when audiobook and ebook are both available', async () => {
+    useEbookStatusMock.mockReturnValue({
+      ebookStatus: {
+        ebookSourcesEnabled: true,
+        hasActiveEbookRequest: true,
+        existingEbookStatus: 'available',
+        existingEbookRequestId: 'ebook-1',
+        ebookAvailable: true,
+        audiobookAvailable: true,
+        hasActiveAudiobookRequest: true,
+        existingAudiobookStatus: 'available',
+      },
+      revalidate: revalidateEbookStatusMock,
+    });
+    const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
+
+    render(
+      <AudiobookDetailsModal
+        asin="ASIN123"
+        isOpen={true}
+        onClose={vi.fn()}
+        isAvailable={true}
+      />
+    );
+
+    await act(async () => {});
+    expect(screen.getByRole('button', { name: 'In Your Library' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Request Audiobook' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Request EPUB' })).toBeNull();
   });
 
   it('shows pending approval status with requester name', async () => {

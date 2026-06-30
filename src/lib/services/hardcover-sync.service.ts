@@ -16,6 +16,7 @@ import {
   ShelfSyncOptions,
   createEmptyStats,
   resolveMaxLookups,
+  resolveShelfRequestMediaType,
   processShelfBooks,
 } from '@/lib/services/shelf-sync-core.service';
 
@@ -90,14 +91,15 @@ export async function processHardcoverShelves(
 
       log.info(`Found ${fetchedData.books.length} books in list "${shelf.name}" (Hardcover API)${!shelf.autoRequest ? ' (auto-request disabled)' : ''}`);
 
-      const bookData = await processShelfBooks(
-        'hardcover', fetchedData.books, shelf.user.id, shelf.id, stats, log, maxLookups, shelf.autoRequest,
-      );
-
       const finalListName =
         fetchedData.listName !== 'Hardcover List'
           ? fetchedData.listName
           : shelf.name;
+      const requestMediaType = resolveShelfRequestMediaType(finalListName);
+
+      const bookData = await processShelfBooks(
+        'hardcover', fetchedData.books, shelf.user.id, shelf.id, stats, log, maxLookups, shelf.autoRequest, requestMediaType,
+      );
 
       await prisma.hardcoverShelf.update({
         where: { id: shelf.id },
