@@ -404,7 +404,8 @@ describe('AudiobookDetailsModal', () => {
 
     expect(screen.queryByTestId('interactive-modal')).toBeNull();
 
-    fireEvent.click(screen.getByTitle('Interactive Search'));
+    // Interactive Search now renders twice (small icon in the mobile header, full icon in the desktop action bar)
+    fireEvent.click(screen.getAllByTitle('Interactive Search')[0]);
 
     expect(screen.getByTestId('interactive-modal')).toHaveAttribute('data-open', 'true');
   });
@@ -461,7 +462,7 @@ describe('AudiobookDetailsModal', () => {
 
     const statusPill = screen.getByRole('button', { name: 'Requested' });
     expect(statusPill).toBeDisabled();
-    expect(screen.getByTitle('Interactive Search')).toBeInTheDocument();
+    expect(screen.getAllByTitle('Interactive Search').length).toBeGreaterThan(0);
     expect(screen.getByTitle('Manual Import')).toBeInTheDocument();
   });
 });
