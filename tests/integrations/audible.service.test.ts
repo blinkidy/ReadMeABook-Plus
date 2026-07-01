@@ -1380,6 +1380,89 @@ describe('AudibleService', () => {
 
       expect(result).toBeNull();
     });
+
+    it('backfills a longer description from the catalog API when Audnexus description is truncated with an ellipsis', async () => {
+      axiosMock.get.mockResolvedValueOnce({
+        data: {
+          title: 'Audnexus Book',
+          authors: [{ name: 'Author A' }],
+          description: 'A short teaser that gets cut off...',
+        },
+      });
+
+      const product = makeProduct({
+        title: 'Audnexus Book',
+        publisher_summary: 'A short teaser that gets cut off and then continues with the full story.',
+      });
+      apiClientMock.get.mockResolvedValue(apiResponse({ product }));
+
+      const service = new AudibleService();
+      const details = await service.getAudiobookDetails('B000CCCCCC');
+
+      expect(details?.description).toBe(
+        'A short teaser that gets cut off and then continues with the full story.',
+      );
+      expect(details?.title).toBe('Audnexus Book');
+      expect(apiClientMock.get).toHaveBeenCalled();
+    });
+
+    it('backfills a description from the catalog API when Audnexus has no description at all', async () => {
+      axiosMock.get.mockResolvedValueOnce({
+        data: {
+          title: 'Audnexus Book',
+          authors: [{ name: 'Author A' }],
+        },
+      });
+
+      const product = makeProduct({
+        title: 'Audnexus Book',
+        publisher_summary: 'The full catalog description.',
+      });
+      apiClientMock.get.mockResolvedValue(apiResponse({ product }));
+
+      const service = new AudibleService();
+      const details = await service.getAudiobookDetails('B000DDDDDD');
+
+      expect(details?.description).toBe('The full catalog description.');
+    });
+
+    it('keeps the Audnexus description when the catalog API has nothing longer to offer', async () => {
+      axiosMock.get.mockResolvedValueOnce({
+        data: {
+          title: 'Audnexus Book',
+          authors: [{ name: 'Author A' }],
+          description: 'Short teaser...',
+        },
+      });
+
+      const product = makeProduct({ title: 'Audnexus Book', publisher_summary: 'Also short.' });
+      apiClientMock.get.mockResolvedValue(apiResponse({ product }));
+
+      const service = new AudibleService();
+      const details = await service.getAudiobookDetails('B000EEEEEE');
+
+      expect(details?.description).toBe('Short teaser...');
+    });
+
+    it('does not fail the request when the catalog backfill call throws', async () => {
+      axiosMock.get.mockResolvedValueOnce({
+        data: {
+          title: 'Audnexus Book',
+          authors: [{ name: 'Author A' }],
+          description: 'Short teaser...',
+        },
+      });
+
+      const service = new AudibleService();
+      vi.spyOn(service as any, 'fetchAudibleDetailsFromApi').mockRejectedValue(
+        new Error('catalog boom'),
+      );
+
+      const details = await service.getAudiobookDetails('B000FFFFFF');
+
+      expect(details?.title).toBe('Audnexus Book');
+      expect(details?.description).toBe('Short teaser...');
+    });
   });
 
   // -------------------------------------------------------------------------
