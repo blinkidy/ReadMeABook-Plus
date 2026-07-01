@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { VersionBadge } from '@/components/ui/VersionBadge';
@@ -15,11 +16,13 @@ import { ChangePasswordModal } from '@/components/ui/ChangePasswordModal';
 import { useSmartDropdownPosition } from '@/hooks/useSmartDropdownPosition';
 
 export function Header() {
+  const router = useRouter();
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showBookDate, setShowBookDate] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [headerSearch, setHeaderSearch] = useState('');
   const { containerRef, dropdownRef, positionAbove, style } =
     useSmartDropdownPosition(showUserMenu);
 
@@ -73,6 +76,20 @@ export function Header() {
     } catch (error) {
       console.error('Login failed:', error);
     }
+  };
+
+  const handleHeaderSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = headerSearch.trim();
+
+    if (!trimmed) {
+      router.push('/search');
+      return;
+    }
+
+    router.push(`/search?q=${encodeURIComponent(trimmed)}`);
+    setHeaderSearch('');
+    setShowMobileMenu(false);
   };
 
   // User menu dropdown (rendered via portal)
@@ -135,7 +152,7 @@ export function Header() {
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="hidden lg:flex items-center gap-6">
             <Link
               href="/"
               className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
@@ -188,31 +205,10 @@ export function Header() {
 
           {/* Mobile Menu Button & User Menu */}
           <div className="flex items-center gap-2 md:gap-4">
-            {/* Search Button (visible on mobile) */}
-            <Link
-              href="/search"
-              className="md:hidden p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              aria-label="Search"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </Link>
-
             {/* Mobile Menu Button */}
             <button
               onClick={() => setShowMobileMenu(!showMobileMenu)}
-              className="md:hidden p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+              className="lg:hidden p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
               aria-label="Toggle menu"
             >
               {showMobileMenu ? (
@@ -276,9 +272,39 @@ export function Header() {
           </div>
         </div>
 
+        {user && (
+          <form onSubmit={handleHeaderSearch} className="mt-3">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg
+                  className="h-4 w-4 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </div>
+              <input
+                type="search"
+                value={headerSearch}
+                onChange={(event) => setHeaderSearch(event.target.value)}
+                placeholder="Search audiobooks and books"
+                className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 pl-10 pr-3 text-base text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:bg-gray-950 sm:text-sm"
+                aria-label="Search audiobooks and books"
+              />
+            </div>
+          </form>
+        )}
+
         {/* Mobile Navigation Menu */}
         {showMobileMenu && (
-          <div className="md:hidden border-t border-gray-200 dark:border-gray-700 mt-3 pt-3">
+          <div className="lg:hidden border-t border-gray-200 dark:border-gray-700 mt-3 pt-3">
             <nav className="flex flex-col space-y-2">
               <Link
                 href="/"

@@ -94,6 +94,28 @@ describe('Audiobooks search torrents route', () => {
     expect(payload.results[0].rank).toBe(1);
     expect(rankTorrentsMock).toHaveBeenCalled();
   });
+
+  it('cleans promotional title suffixes before searching indexers', async () => {
+    authRequest.json.mockResolvedValue({
+      title: 'Yesteryear A GMA Book Club Pick',
+      author: 'Caro Claire Burke',
+    });
+    configServiceMock.get
+      .mockResolvedValueOnce(JSON.stringify([{ id: 1, name: 'Indexer', protocol: 'torrent', priority: 10 }]))
+      .mockResolvedValueOnce(null);
+
+    groupIndexersMock.mockReturnValue({ groups: [{ categories: [1], indexerIds: [1] }], skippedIndexers: [] });
+    prowlarrMock.searchWithVariations.mockResolvedValue([]);
+
+    const { POST } = await import('@/app/api/audiobooks/search-torrents/route');
+    await POST({} as any);
+
+    expect(prowlarrMock.searchWithVariations).toHaveBeenCalledWith(
+      'Yesteryear',
+      'Caro Claire Burke',
+      expect.objectContaining({ categories: [1], indexerIds: [1] })
+    );
+  });
 });
 
 

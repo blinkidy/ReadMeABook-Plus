@@ -66,6 +66,7 @@ vi.mock('@/lib/services/request-creator.service', () => ({
 // Mock findPlexMatch
 vi.mock('@/lib/utils/audiobook-matcher', () => ({
   findPlexMatch: vi.fn().mockResolvedValue(null),
+  findBookOrbitMatch: vi.fn().mockResolvedValue(null),
 }));
 
 describe('processWatchedLists', () => {

@@ -131,6 +131,36 @@ describe('processSearchEbook', () => {
     );
   });
 
+  it('uses a cleaned promotional subtitle for title fallback search', async () => {
+    prismaMock.request.update.mockResolvedValue({});
+
+    ebookScraperMock.searchByAsin.mockResolvedValue(null);
+    ebookScraperMock.searchByTitle.mockResolvedValue(null);
+
+    const { processSearchEbook } = await import('@/lib/processors/search-ebook.processor');
+
+    await processSearchEbook({
+      requestId: 'req-clean-title',
+      audiobook: {
+        id: 'ab-clean-title',
+        title: 'Yesteryear: A GMA Book Club Pick',
+        author: 'Caro Claire Burke',
+        asin: 'B00YESTERYEAR',
+      },
+      jobId: 'job-clean-title',
+    });
+
+    expect(ebookScraperMock.searchByTitle).toHaveBeenCalledWith(
+      'Yesteryear',
+      'Caro Claire Burke',
+      'epub',
+      'https://annas-archive.gl',
+      expect.anything(),
+      undefined,
+      'en'
+    );
+  });
+
   it('searches by title when no ASIN is available', async () => {
     prismaMock.request.update.mockResolvedValue({});
     prismaMock.downloadHistory.create.mockResolvedValue({ id: 'dh-3' });

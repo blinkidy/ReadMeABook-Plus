@@ -32,33 +32,58 @@
 - EPUB requests enqueue `addSearchEbookJob(requestId, payload, 'epub')`.
 - Audiobook requests still enqueue the normal audiobook search job.
 - Notifications label EPUB requests as `(EPUB)`.
+- Completed first-class EPUB requests now mark `Request.status = 'available'` after BookOrbit organization so they hide from discovery and show complete in admin views.
+- `bookorbit_library_scan` periodically scans the configured BookOrbit library path, registers found ebook files in `plex_library` with `bookorbit://...` IDs, and marks matching ebook requests available.
 
 ## UI Changes Added
 - `src/components/audiobooks/AudiobookCard.tsx`
-  - Added request format selector: Audiobook / EPUB.
-  - Calls request API with selected `mediaType`.
-  - Only updates local audiobook status for audiobook requests.
+  - Request format selector removed from hover overlay for touch-first use.
+  - Cards now open details; format selection/request actions live in `AudiobookDetailsModal`.
 - `src/components/audiobooks/AudiobookDetailsModal.tsx`
   - Added format segmented control before the request action.
   - Shows EPUB vs Audiobook success messaging.
   - Only updates local audiobook status for audiobook requests.
+  - Request actions are format-aware: ebook-only availability offers `Request Audiobook`, audiobook-only availability offers `Request EPUB`, both-missing shows Audiobook/EPUB/Both choices, and both-available shows no request action.
+  - `Both` is a UI convenience that creates one audiobook request and one EPUB request through the existing request API.
+- `src/components/layout/Header.tsx`
+  - Added authenticated top search bar that navigates to `/search?q=...`.
+- Search/author/series pages use broader audiobook/book language.
+
+## Search Quality
+- `src/lib/utils/search-title.ts`
+  - Cleans known promotional Audible subtitle suffixes before automatic and interactive indexer search.
+  - Example: `Yesteryear: A GMA Book Club Pick` searches as `Yesteryear`.
+- Handles punctuation-stripped display titles like `Yesteryear A GMA Book Club Pick`.
+- Audiobook and EPUB automatic/interactive search paths clean known marketing suffixes before querying indexers.
 - `src/lib/hooks/useRequests.ts`
   - `createRequest()` accepts `mediaType`.
   - User-facing "already processing" message differentiates EPUB.
+
+## Audible Discovery Quality
+- User-configured genre/category home sections scrape Audible bestseller charts via `/charts/best/category-audiobooks/<categoryId>`.
+- Avoid using generic `/search?node=<id>&sort=popularity-rank` for categories; that route can surface launch/promo-heavy oddities that do not match Audible's visible genre bestseller pages.
+- Avoid `/adblbestsellers?node=<categoryId>` for categories; Audible redirects it to the global bestsellers chart, so every genre can end up with the same popular snapshot.
 
 ## API And Service Changes Added
 - `src/app/api/requests/route.ts`
   - POST schema accepts `mediaType`.
   - Passes media type to request creation service.
+- `src/app/api/audiobooks/[asin]/ebook-status/route.ts`
+  - Returns separate `audiobookAvailable` and `ebookAvailable` flags for details-modal actions.
 - `src/lib/services/request-creator.service.ts`
   - Central first-class EPUB request behavior.
+  - Audiobook availability checks exclude BookOrbit rows so ebook-only ownership does not block requesting the audiobook.
+- `src/lib/services/shelf-sync-core.service.ts`
+  - Hardcover/Goodreads auto-request shelves default to audiobooks, but exact shelf name `Want To Own Books` creates EPUB requests.
+  - Exact shelf name `Want To Own Audiobooks` remains the normal audiobook request path.
 - `src/app/api/requests/[id]/select-ebook/route.ts`
   - Allows first-class ebook requests without `parentRequestId`.
   - Keeps sidecar ebook selection behavior for parent audiobook requests.
 
 ## BookOrbit EPUB Destination Added
 - New optional env var: `BOOKORBIT_INGEST_PATH`.
-- New settings key: `ebook_bookorbit_ingest_path`.
+- New optional env var: `BOOKORBIT_LIBRARY_PATH`.
+- New settings keys: `ebook_bookorbit_ingest_path`, `ebook_bookorbit_library_path`.
 - Fallback chain for ebook organization:
   1. DB config `ebook_bookorbit_ingest_path`
   2. Env `BOOKORBIT_INGEST_PATH`
@@ -71,10 +96,18 @@
   - Ebook organization uses `getEbookFileOrganizer()`.
   - Audiobook organization still uses `getFileOrganizer()`.
 - Settings and setup path testing now include the EPUB destination path.
+- `src/lib/processors/bookorbit-scan.processor.ts`
+  - Scans the BookOrbit library path without moving/deleting files.
+  - Scan fallback: DB `ebook_bookorbit_library_path` -> env `BOOKORBIT_LIBRARY_PATH` -> ingest path -> media path.
+  - Parses BookOrbit default names like `Books/Author/Series/01. Title (Year)/01. Title (Year).epub` and file-as-book variants.
+  - Ignores top-level collection folders (`Books`, `Ebooks`) and strips leading series indexes/trailing years from titles.
+  - Uses ASIN from path/filename when present; otherwise tries title/author against `AudibleCache`.
+  - Marks ebook requests available by ASIN, normalized title+author, or normalized title when BookOrbit author is unknown.
+  - Adds scoped BookOrbit fallback matching only for `bookorbit://` library rows; unique title-only matches are allowed when author metadata is missing.
 
 ## Deployment And Docs Changes Added
 - Added `.env.example`.
-- Added `/bookorbit/ingest` volume/env support to:
+- Added `/bookorbit/ingest` and `/bookorbit/library` volume/env support to:
   - `docker-compose.yml`
   - `docker-compose.local.yml`
   - `docker-compose.debug.yml`
@@ -84,11 +117,28 @@
   - `documentation/deployment/docker.md`
 - Generalized some UI wording from audiobook-only to book/request language where appropriate.
 
+## Workflow Automation Added
+- `.github/workflows/pre-release-checks.yml`
+  - Runs on PRs to `main`, pushes to `main`, pushes to `codex/**`, and manual dispatch.
+  - Calls reusable `Backend Tests` workflow with Discord notifications disabled.
+  - Builds the unified Docker image with `push: false`.
+  - Stops before publishing/release.
+- `.github/workflows/build-unified-image.yml`
+  - Remains the manual/tag release workflow that publishes to GHCR.
+  - Discord notifications are disabled/removed.
+  - Manual dispatch defaults to `linux/amd64` for faster publish builds.
+  - Use `linux/amd64,linux/arm64` only when a multi-arch image is actually needed; ARM64 builds are much slower under GitHub runner emulation.
+
 ## Tests Added Or Updated
 - `tests/services/request-creator-ignore.test.ts`
   - Mocked `addSearchEbookJob`.
   - Added coverage for first-class EPUB requests.
   - Asserts EPUB request type, pending status, ebook search job dispatch, and no audiobook search job.
+- Existing tests were updated for first-class EPUB defaults:
+  - Notification tests expect `sourceUrl` plus request type args.
+  - Audiobook card/modal tests expect `Request Audiobook` and `Audiobook request created!`.
+  - Login/requests wording expects broader book language.
+  - Setup path tests treat invalid templates as failed path validation.
 
 ## Verification State From Implementation Session
 - `git diff --check` passed with only LF/CRLF warnings.

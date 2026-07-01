@@ -93,9 +93,12 @@ export function useCategoryAudiobooks(
   categoryId: string | null,
   limit: number = 20,
   page: number = 1,
-  hideAvailable: boolean = false
+  hideAudiobookAvailable: boolean = false,
+  hideEbookAvailable: boolean = false
 ) {
-  const hideParam = hideAvailable ? '&hideAvailable=true' : '';
+  const hideParam =
+    (hideAudiobookAvailable ? '&hideAudiobookAvailable=true' : '') +
+    (hideEbookAvailable ? '&hideEbookAvailable=true' : '');
   const endpoint = categoryId
     ? `/api/audiobooks/category/${categoryId}?page=${page}&limit=${limit}${hideParam}`
     : null;

@@ -14,6 +14,7 @@ const requireAdminMock = vi.hoisted(() => vi.fn());
 const jobQueueMock = vi.hoisted(() => ({
   addNotificationJob: vi.fn(() => Promise.resolve('job-1')),
   addSearchJob: vi.fn(() => Promise.resolve('job-2')),
+  addSearchEbookJob: vi.fn(() => Promise.resolve('job-3')),
 }));
 const findPlexMatchMock = vi.hoisted(() => vi.fn());
 const audibleServiceMock = vi.hoisted(() => ({
@@ -35,6 +36,7 @@ vi.mock('@/lib/services/job-queue.service', () => ({
 
 vi.mock('@/lib/utils/audiobook-matcher', () => ({
   findPlexMatch: findPlexMatchMock,
+  findBookOrbitMatch: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@/lib/integrations/audible.service', () => ({
@@ -115,7 +117,9 @@ describe('Notification Triggers - Integration Tests', () => {
         'req-1',
         'Test Book',
         'Test Author',
-        'testuser'
+        'testuser',
+        undefined,
+        'audiobook'
       );
       expect(jobQueueMock.addSearchJob).not.toHaveBeenCalled(); // No search when awaiting approval
     });
@@ -181,7 +185,9 @@ describe('Notification Triggers - Integration Tests', () => {
         'req-1',
         'Test Book',
         'Test Author',
-        'testuser'
+        'testuser',
+        undefined,
+        'audiobook'
       );
       expect(jobQueueMock.addSearchJob).toHaveBeenCalled(); // Search triggered
     });
@@ -246,7 +252,9 @@ describe('Notification Triggers - Integration Tests', () => {
         'req-1',
         'Test Book',
         'Test Author',
-        'testuser'
+        'testuser',
+        undefined,
+        'audiobook'
       );
       expect(jobQueueMock.addSearchJob).not.toHaveBeenCalled(); // No automatic search
     });

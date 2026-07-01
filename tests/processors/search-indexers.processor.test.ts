@@ -107,6 +107,34 @@ describe('processSearchIndexers', () => {
     );
   });
 
+  it('searches Prowlarr with a cleaned promotional subtitle', async () => {
+    configMock.get.mockImplementation(async (key: string) => {
+      if (key === 'prowlarr_indexers') {
+        return JSON.stringify([{ id: 1, name: 'Indexer', protocol: 'torrent', priority: 10, categories: [3030] }]);
+      }
+      if (key === 'indexer_flag_config') {
+        return JSON.stringify([]);
+      }
+      return null;
+    });
+
+    prowlarrMock.searchWithVariations.mockResolvedValue([]);
+    prismaMock.request.update.mockResolvedValue({});
+
+    const { processSearchIndexers } = await import('@/lib/processors/search-indexers.processor');
+    await processSearchIndexers({
+      requestId: 'req-clean-title',
+      audiobook: { id: 'a-clean-title', title: 'Yesteryear: A GMA Book Club Pick', author: 'Caro Claire Burke' },
+      jobId: 'job-clean-title',
+    });
+
+    expect(prowlarrMock.searchWithVariations).toHaveBeenCalledWith(
+      'Yesteryear',
+      'Caro Claire Burke',
+      expect.objectContaining({ categories: [3030], indexerIds: [1] })
+    );
+  });
+
   it('fails when no indexers are configured', async () => {
     configMock.get.mockResolvedValue(null);
     prismaMock.request.update.mockResolvedValue({});

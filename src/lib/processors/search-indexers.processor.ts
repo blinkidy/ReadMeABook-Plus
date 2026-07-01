@@ -11,6 +11,7 @@ import { groupIndexersByCategories, getGroupDescription } from '../utils/indexer
 import { RMABLogger } from '../utils/logger';
 import { getLanguageForRegion } from '../constants/language-config';
 import { filterBlockedResults } from '../utils/filter-blocked-results';
+import { cleanIndexerSearchTitle } from '../utils/search-title';
 import type { AudibleRegion } from '../types/audible';
 
 /**
@@ -40,7 +41,7 @@ export async function processSearchIndexers(payload: SearchIndexersPayload): Pro
       where: { id: requestId },
       select: { customSearchTerms: true },
     });
-    const effectiveSearchTitle = requestRecord?.customSearchTerms || audiobook.title;
+    const effectiveSearchTitle = requestRecord?.customSearchTerms || cleanIndexerSearchTitle(audiobook.title);
 
     // Get enabled indexers from configuration
     const { getConfigService } = await import('../services/config.service');
@@ -87,6 +88,8 @@ export async function processSearchIndexers(payload: SearchIndexersPayload): Pro
 
     if (requestRecord?.customSearchTerms) {
       logger.info(`Searching with custom terms: "${effectiveSearchTitle}" (original: "${audiobook.title}") by "${audiobook.author}"`);
+    } else if (effectiveSearchTitle !== audiobook.title) {
+      logger.info(`Searching with cleaned title: "${effectiveSearchTitle}" (original: "${audiobook.title}") by "${audiobook.author}"`);
     } else {
       logger.info(`Searching for: "${audiobook.title}" by "${audiobook.author}"`);
     }

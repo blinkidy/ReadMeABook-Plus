@@ -430,7 +430,7 @@ describe('Setup test routes', () => {
     } as any);
     const payload = await response.json();
 
-    expect(payload.success).toBe(true);
+    expect(payload.success).toBe(false);
     expect(payload.template).toBeDefined();
     expect(payload.template.isValid).toBe(false);
     expect(payload.template.error).toContain('No valid variable found in conditional block');

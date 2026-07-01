@@ -79,8 +79,8 @@ model NotificationBackend {
 - Includes user info in query (plexUsername)
 
 **Ebook Available (processor: organize-files)**
-- After ebook `status: 'downloaded'` (terminal) → request_available (requestType: 'ebook')
-- Ebooks don't transition to 'available' via Plex matching
+- After ebook `status: 'available'` (terminal) → request_available (requestType: 'ebook')
+- Ebooks become `available` after BookOrbit organization; Plex/ABS matching is not required
 
 **Request Error (processors: monitor-download, organize-files)**
 - After `status: 'failed'` or `status: 'warn'` update → request_error

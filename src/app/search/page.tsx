@@ -5,19 +5,33 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { AudiobookGrid } from '@/components/audiobooks/AudiobookGrid';
+import { HardcoverBookGrid } from '@/components/books/HardcoverBookGrid';
 import { LoadMoreBar } from '@/components/ui/LoadMoreBar';
 import { useSearch, Audiobook } from '@/lib/hooks/useAudiobooks';
+import { useBookSearch } from '@/lib/hooks/useBookSearch';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { SectionToolbar } from '@/components/ui/SectionToolbar';
 import { usePreferences } from '@/contexts/PreferencesContext';
 
-export default function SearchPage() {
-  const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
-  const { cardSize, setCardSize, squareCovers, setSquareCovers, hideAvailable, setHideAvailable } = usePreferences();
+function SearchPageContent() {
+  const searchParams = useSearchParams();
+  const queryParam = searchParams.get('q') || '';
+  const [query, setQuery] = useState(queryParam);
+  const [debouncedQuery, setDebouncedQuery] = useState(queryParam);
+  const {
+    cardSize, setCardSize, squareCovers, setSquareCovers,
+    hideAudiobookAvailable, setHideAudiobookAvailable,
+    hideEbookAvailable, setHideEbookAvailable,
+  } = usePreferences();
+
+  useEffect(() => {
+    setQuery(queryParam);
+    setDebouncedQuery(queryParam);
+  }, [queryParam]);
 
   // Debounce search query
   useEffect(() => {
@@ -30,11 +44,21 @@ export default function SearchPage() {
 
   const { results, totalResults, hasMore, isLoading, isLoadingMore, loadMore } = useSearch(debouncedQuery);
 
-  // Filter out available titles when hideAvailable is enabled
+  // Filter out titles already owned in a format the user wants hidden
   const filteredResults = useMemo(
-    () => hideAvailable ? results.filter((b: Audiobook) => !b.isAvailable && b.requestStatus !== 'completed') : results,
-    [results, hideAvailable]
+    () => results.filter((b: Audiobook) => {
+      if (hideAudiobookAvailable && (b.audiobookAvailable || b.requestStatus === 'completed')) return false;
+      if (hideEbookAvailable && b.ebookAvailable) return false;
+      return true;
+    }),
+    [results, hideAudiobookAvailable, hideEbookAvailable]
   );
+
+  // Always search Hardcover alongside Audible. Audible's keyword search can return
+  // unrelated results even when the exact book has no audiobook edition, so gating
+  // this on "Audible found zero results" would hide it whenever Audible returns
+  // anything at all, even a wrong match.
+  const bookSearch = useBookSearch(debouncedQuery);
 
   const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +84,7 @@ export default function SearchPage() {
           Search Books
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Find and request any audiobook from Audible
+            Find and request any audiobook or book
           </p>
         </div>
 
@@ -86,7 +110,7 @@ export default function SearchPage() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by title, author, or narrator..."
+              placeholder="Search audiobooks and books by title, author, or narrator..."
               className="w-full pl-12 pr-12 py-4 text-lg border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400"
               autoFocus
             />
@@ -126,8 +150,10 @@ export default function SearchPage() {
                     </span>
                   )}
                   <SectionToolbar
-                    hideAvailable={hideAvailable}
-                    onToggleHideAvailable={setHideAvailable}
+                    hideAudiobookAvailable={hideAudiobookAvailable}
+                    onToggleHideAudiobookAvailable={setHideAudiobookAvailable}
+                    hideEbookAvailable={hideEbookAvailable}
+                    onToggleHideEbookAvailable={setHideEbookAvailable}
                     squareCovers={squareCovers}
                     onToggleSquareCovers={setSquareCovers}
                     cardSize={cardSize}
@@ -141,7 +167,7 @@ export default function SearchPage() {
             <AudiobookGrid
               audiobooks={filteredResults}
               isLoading={isLoading}
-              emptyMessage={`No results found for "${debouncedQuery}"`}
+              emptyMessage={`No audiobook found for "${debouncedQuery}"`}
               cardSize={cardSize}
               squareCovers={squareCovers}
             />
@@ -157,6 +183,38 @@ export default function SearchPage() {
                 itemLabel="results"
               />
             )}
+
+            {/* Always shown alongside Audible results, since Audible returning
+                something doesn't mean it found the actual book being searched for. */}
+            <div className="space-y-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-6 bg-gradient-to-b from-orange-500 to-amber-500 rounded-full" />
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">
+                  Books (no audiobook found)
+                </h2>
+              </div>
+
+              <HardcoverBookGrid
+                books={bookSearch.results}
+                isLoading={bookSearch.isLoading}
+                emptyMessage={
+                  bookSearch.error
+                    ? 'Book search is not set up yet. Ask an admin to add a Hardcover API key in E-book Sidecar settings.'
+                    : `No books found for "${debouncedQuery}"`
+                }
+              />
+
+              {bookSearch.results.length > 0 && (
+                <LoadMoreBar
+                  loadedCount={bookSearch.results.length}
+                  totalCount={bookSearch.totalResults}
+                  hasMore={bookSearch.hasMore}
+                  isLoading={bookSearch.isLoadingMore}
+                  onLoadMore={bookSearch.loadMore}
+                  itemLabel="results"
+                />
+              )}
+            </div>
           </div>
         ) : (
           /* Empty State */
@@ -175,15 +233,23 @@ export default function SearchPage() {
               />
             </svg>
             <p className="text-xl text-gray-600 dark:text-gray-400">
-              Start typing to search for audiobooks
+              Start typing to search for audiobooks and books
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-500">
-              Search by title, author, or narrator name
+              Search by title, author, or narrator name for audiobooks and books
             </p>
           </div>
         )}
       </main>
       </div>
     </ProtectedRoute>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense>
+      <SearchPageContent />
+    </Suspense>
   );
 }

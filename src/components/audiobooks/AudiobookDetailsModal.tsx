@@ -8,12 +8,12 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
 import { useAudiobookDetails } from '@/lib/hooks/useAudiobooks';
-import { useCreateRequest, useEbookStatus, useDownloadStatus, useFetchEbookByAsin } from '@/lib/hooks/useRequests';
+import { useCreateRequest, useEbookStatus, useDownloadStatus } from '@/lib/hooks/useRequests';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import { InteractiveTorrentSearchModal } from '@/components/requests/InteractiveTorrentSearchModal';
@@ -23,6 +23,7 @@ import { FolderArrowDownIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { EyeSlashIcon as EyeSlashSolidIcon } from '@heroicons/react/24/solid';
 import { fetchWithAuth } from '@/lib/utils/api';
 import { useIsIgnored, useToggleIgnore } from '@/lib/hooks/useIgnoredAudiobooks';
+import { useIsClamped } from '@/lib/hooks/useIsClamped';
 
 interface AudiobookDetailsModalProps {
   asin: string;
@@ -41,6 +42,8 @@ interface AudiobookDetailsModalProps {
   /** Optional admin action buttons (Approve / Search / Deny) rendered as a second row in the action bar */
   adminActions?: React.ReactNode;
 }
+
+type RequestFormat = 'audiobook' | 'epub' | 'both';
 
 // Status helper
 const getStatusInfo = (isAvailable: boolean, requestStatus: string | null, requestedByUsername: string | null) => {
@@ -88,9 +91,8 @@ export function AudiobookDetailsModal({
   const { squareCovers } = usePreferences();
   const { audiobook, audibleBaseUrl, isLoading, error } = useAudiobookDetails(isOpen ? asin : null);
   const { createRequest, isLoading: isRequesting } = useCreateRequest();
-  const { ebookStatus, revalidate: revalidateEbookStatus } = useEbookStatus(isOpen && isAvailable ? asin : null);
+  const { ebookStatus, revalidate: revalidateEbookStatus } = useEbookStatus(isOpen ? asin : null);
   const { downloadAvailable, requestId } = useDownloadStatus(isOpen ? asin : null);
-  const { fetchEbook, isLoading: isFetchingEbook } = useFetchEbookByAsin();
 
   const { isIgnored, ignoredId, isLoading: isLoadingIgnore } = useIsIgnored(isOpen ? asin : null);
   const { addIgnore, removeIgnore } = useToggleIgnore();
@@ -108,20 +110,53 @@ export function AudiobookDetailsModal({
   const [isDownloading, setIsDownloading] = useState(false);
   const [coverError, setCoverError] = useState(false);
   const [isTogglingIgnore, setIsTogglingIgnore] = useState(false);
-  const [requestFormat, setRequestFormat] = useState<'audiobook' | 'epub'>('audiobook');
+  const [requestFormat, setRequestFormat] = useState<RequestFormat>('audiobook');
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const descriptionRef = useRef<HTMLParagraphElement>(null);
+  // Real overflow detection instead of a character-count guess, since the same
+  // text wraps into more lines on narrower (mobile) viewports.
+  // `mounted` must be a dependency: this modal renders once before `mounted`
+  // flips true (see below), so the paragraph doesn't exist yet on the first
+  // pass — without this, the effect never re-measures once it actually mounts.
+  const isDescriptionClamped = useIsClamped(descriptionRef, [audiobook?.description, descriptionExpanded, mounted]);
 
   // Sync local status when the prop changes (e.g. page data refreshes)
   useEffect(() => {
     setLocalRequestStatus(requestStatus ?? null);
   }, [requestStatus]);
 
+  // Collapse the summary again when a different book's details are opened
+  useEffect(() => {
+    setDescriptionExpanded(false);
+  }, [asin]);
+
   const effectiveStatus = localRequestStatus;
-  const status = getStatusInfo(isAvailable, effectiveStatus, requestedByUsername);
-  const canShowEbookButtons = isAvailable && ebookStatus?.ebookSourcesEnabled && !ebookStatus?.hasActiveEbookRequest;
+  const ebookAvailable = ebookStatus?.ebookAvailable ?? false;
+  const audiobookAvailable = ebookStatus?.audiobookAvailable ?? (isAvailable && !ebookAvailable);
+  const audiobookEffectiveStatus = ebookStatus ? ebookStatus.existingAudiobookStatus : effectiveStatus;
+  const status = getStatusInfo(audiobookAvailable, audiobookEffectiveStatus, requestedByUsername);
+  const bothFormatsAvailable = audiobookAvailable && ebookAvailable;
+  const hasEbookInProgress = !!ebookStatus?.hasActiveEbookRequest && !ebookAvailable;
+  const canRequestAudiobook = !audiobookAvailable && status.canRequest;
+  const canSearchAudiobook = !audiobookAvailable;
+  const canRequestEbook = !ebookAvailable && !!ebookStatus?.ebookSourcesEnabled && !ebookStatus?.hasActiveEbookRequest;
+  const ebookSearchIconVisible = canRequestEbook && audiobookAvailable && !!user && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false);
+  const requestableFormats = useMemo<RequestFormat[]>(() => [
+    ...(canRequestAudiobook ? ['audiobook' as const] : []),
+    ...(canRequestEbook ? ['epub' as const] : []),
+    ...(canRequestAudiobook && canRequestEbook ? ['both' as const] : []),
+  ], [canRequestAudiobook, canRequestEbook]);
+  const canRequestSelectedFormat = requestableFormats.includes(requestFormat);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (requestableFormats.length > 0 && !requestableFormats.includes(requestFormat)) {
+      setRequestFormat(requestableFormats[0]);
+    }
+  }, [requestableFormats, requestFormat]);
 
   useEffect(() => {
     if (isOpen) {
@@ -148,12 +183,23 @@ export function AudiobookDetailsModal({
     }
 
     try {
-      await createRequest(audiobook, { mediaType: requestFormat });
+      if (requestFormat === 'both') {
+        await createRequest(audiobook, { mediaType: 'audiobook' });
+        await createRequest(audiobook, { mediaType: 'epub' });
+        setLocalRequestStatus('pending');
+        onStatusChange?.('pending');
+        revalidateEbookStatus();
+      } else {
+        await createRequest(audiobook, { mediaType: requestFormat });
+      }
+
       if (requestFormat === 'audiobook') {
         setLocalRequestStatus('pending');
         onStatusChange?.('pending');
+      } else if (requestFormat === 'epub') {
+        revalidateEbookStatus();
       }
-      showNotification(`${requestFormat === 'epub' ? 'EPUB' : 'Audiobook'} request created!`);
+      showNotification(`${requestFormat === 'both' ? 'Audiobook and EPUB' : requestFormat === 'epub' ? 'EPUB' : 'Audiobook'} request created!`);
       setTimeout(onClose, 1500);
       onRequestSuccess?.();
     } catch (err) {
@@ -167,21 +213,6 @@ export function AudiobookDetailsModal({
       return;
     }
     setShowInteractiveSearch(true);
-  };
-
-  const handleFetchEbook = async () => {
-    if (!user) {
-      showNotification('Please log in to request ebooks', 'error');
-      return;
-    }
-
-    try {
-      const result = await fetchEbook(asin);
-      revalidateEbookStatus();
-      showNotification(result.needsApproval ? 'Ebook request submitted for approval!' : 'Ebook search started!');
-    } catch (err) {
-      showNotification(err instanceof Error ? err.message : 'Failed to request ebook', 'error');
-    }
   };
 
   const handleCopyAsin = async () => {
@@ -270,10 +301,46 @@ export function AudiobookDetailsModal({
       >
         {/* Mobile: Sticky Header with Close */}
         <div className="sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-700/50 sm:hidden">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Audiobook Details</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Audiobook Details</span>
+
+            {/* Interactive Search - moved here on mobile (smaller icon), desktop keeps it in the action bar */}
+            {canSearchAudiobook && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false) && (
+              <button
+                onClick={handleInteractiveSearch}
+                disabled={!user}
+                className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 flex-shrink-0"
+                title="Interactive Search"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
+            )}
+
+            {/* Ignore Toggle - moved here on mobile (smaller icon), desktop keeps it in the action bar */}
+            {user && !isLoadingIgnore && (
+              <button
+                onClick={handleToggleIgnore}
+                disabled={isTogglingIgnore}
+                className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0 ${
+                  isIgnored
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                    : 'bg-gray-100 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+                }`}
+                title={isIgnored ? 'Stop Ignoring — auto-requests will resume for this book' : 'Ignore from Auto-Requests'}
+              >
+                {isIgnored ? (
+                  <EyeSlashSolidIcon className="w-4 h-4" />
+                ) : (
+                  <EyeSlashIcon className="w-4 h-4" />
+                )}
+              </button>
+            )}
+          </div>
           <button
             onClick={onClose}
-            className="p-2 -mr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="p-2 -mr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
             aria-label="Close"
           >
             <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -494,9 +561,22 @@ export function AudiobookDetailsModal({
                   <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
                     Summary
                   </h3>
-                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap text-[15px]">
+                  <p
+                    ref={descriptionRef}
+                    className={`text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap text-[15px] ${
+                      !descriptionExpanded ? 'line-clamp-4' : ''
+                    }`}
+                  >
                     {audiobook.description}
                   </p>
+                  {(isDescriptionClamped || descriptionExpanded) && (
+                    <button
+                      onClick={() => setDescriptionExpanded(!descriptionExpanded)}
+                      className="mt-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                    >
+                      {descriptionExpanded ? 'Show less' : 'Read more'}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -611,18 +691,34 @@ export function AudiobookDetailsModal({
               </div>
 
               {/* Ebook Status */}
-              {ebookStatus?.hasActiveEbookRequest && (
+              {(ebookAvailable || hasEbookInProgress) && (
                 <div className="mt-4 p-3 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/50">
                   <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400 text-sm">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                     </svg>
                     <span>
-                      Ebook: {ebookStatus.existingEbookStatus === 'awaiting_approval'
-                        ? 'Pending Approval'
-                        : ebookStatus.existingEbookStatus === 'available' || ebookStatus.existingEbookStatus === 'downloaded'
-                          ? 'Available'
-                          : 'In Progress'}
+                      {ebookStatus?.existingEbookStatus === 'awaiting_approval'
+                        ? 'Ebook: Pending Approval'
+                        : ebookAvailable
+                          ? (audiobookAvailable
+                              ? 'Ebook: Available'
+                              : "This book is in your library as an ebook. If you'd like the audiobook version, request it below.")
+                          : 'Ebook: In Progress'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Audiobook Status - mirrors the ebook banner above when only the audiobook is owned */}
+              {audiobookAvailable && !ebookAvailable && (
+                <div className="mt-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50">
+                  <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 text-sm">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-11a3 3 0 003-3V5a3 3 0 00-6 0v3a3 3 0 003 3z" />
+                    </svg>
+                    <span>
+                      This book is in your library as an audiobook. If you&apos;d like the EPUB version, request it below.
                     </span>
                   </div>
                 </div>
@@ -638,46 +734,130 @@ export function AudiobookDetailsModal({
             className="sticky bottom-0 z-20 p-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-t border-gray-200/50 dark:border-gray-700/50"
             style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
           >
-            <div className="flex items-center gap-3">
-              {/* Main Action */}
-              <div className="flex-1">
-                {status.canRequest && (
-                  <div className="mb-2 grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
+            <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[1fr_auto] sm:items-center sm:gap-3">
+              {/* Format Selector - own row, full width */}
+              {requestableFormats.length > 1 && (
+                <div className={`sm:col-span-2 grid gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800 ${
+                  requestableFormats.includes('both') ? 'grid-cols-3' : 'grid-cols-2'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={() => setRequestFormat('audiobook')}
+                    disabled={!requestableFormats.includes('audiobook')}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                      requestFormat === 'audiobook'
+                        ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
+                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                    }`}
+                  >
+                    Audiobook
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRequestFormat('epub')}
+                    disabled={!requestableFormats.includes('epub')}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                      requestFormat === 'epub'
+                        ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
+                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                    }`}
+                  >
+                    EPUB
+                  </button>
+                  {requestableFormats.includes('both') && (
                     <button
                       type="button"
-                      onClick={() => setRequestFormat('audiobook')}
+                      onClick={() => setRequestFormat('both')}
                       className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                        requestFormat === 'audiobook'
+                        requestFormat === 'both'
                           ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
                           : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
                       }`}
                     >
-                      Audiobook
+                      Both
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setRequestFormat('epub')}
-                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                        requestFormat === 'epub'
-                          ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
-                          : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-                      }`}
-                    >
-                      EPUB
-                    </button>
-                  </div>
+                  )}
+                </div>
+              )}
+
+              {/* Icon Actions - right column on desktop. On mobile, Interactive Search and
+                  Ignore Toggle move to the header (smaller icons, upper-left); Manual Import
+                  is desktop-only. Only the ebook-search icon can still appear in this row on mobile. */}
+              {(canSearchAudiobook || (canRequestEbook && audiobookAvailable) || (user && !isLoadingIgnore)) && (
+              <div className={`${ebookSearchIconVisible ? 'flex' : 'hidden'} sm:flex items-center justify-end gap-3 order-2 sm:order-none sm:col-start-2 sm:row-start-2`}>
+                {/* Interactive Search - only when the audiobook is missing and user has permission. Desktop only; see mobile header. */}
+                {canSearchAudiobook && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false) && (
+                  <button
+                    onClick={handleInteractiveSearch}
+                    disabled={!user}
+                    className="hidden sm:flex p-3 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
+                    title="Interactive Search"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </button>
                 )}
-                {status.type === 'available' ? (
+
+                {/* Manual Import - admin only, hidden during active processing and completed states. Desktop only. */}
+                {user?.role === 'admin' && canSearchAudiobook && !['downloading', 'processing', 'searching', 'downloaded', 'completed', 'available'].includes(audiobookEffectiveStatus || '') && (
+                  <button
+                    onClick={() => setShowManualImport(true)}
+                    className="hidden sm:flex p-3 rounded-xl bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 hover:bg-teal-200 dark:hover:bg-teal-900/50 transition-colors"
+                    title="Manual Import"
+                  >
+                    <FolderArrowDownIcon className="w-6 h-6" />
+                  </button>
+                )}
+
+                {/* Ebook interactive search - available when the audiobook exists and the ebook is missing */}
+                {ebookSearchIconVisible && (
+                  <button
+                    onClick={() => setShowInteractiveSearchEbook(true)}
+                    className="p-3 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
+                    title="Search Ebook Sources"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                  </button>
+                )}
+
+                {/* Ignore Toggle - always visible when user is logged in. Desktop only; see mobile header. */}
+                {user && !isLoadingIgnore && (
+                  <button
+                    onClick={handleToggleIgnore}
+                    disabled={isTogglingIgnore}
+                    className={`hidden sm:flex p-3 rounded-xl transition-colors disabled:opacity-50 ${
+                      isIgnored
+                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                        : 'bg-gray-100 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                    title={isIgnored ? 'Stop Ignoring — auto-requests will resume for this book' : 'Ignore from Auto-Requests'}
+                  >
+                    {isIgnored ? (
+                      <EyeSlashSolidIcon className="w-6 h-6" />
+                    ) : (
+                      <EyeSlashIcon className="w-6 h-6" />
+                    )}
+                  </button>
+                )}
+              </div>
+              )}
+
+              {/* Main Action */}
+              <div className="order-3 sm:order-none sm:col-start-1 sm:row-start-2">
+                {bothFormatsAvailable ? (
                   <button
                     disabled
                     className="w-full py-3 px-4 rounded-xl font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30"
                   >
                     In Your Library
                   </button>
-                ) : status.canRequest ? (
+                ) : requestableFormats.length > 0 ? (
                   <button
                     onClick={handleRequest}
-                    disabled={isRequesting || !user}
+                    disabled={isRequesting || !user || !canRequestSelectedFormat}
                     className="w-full py-3 px-4 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isRequesting ? (
@@ -688,13 +868,15 @@ export function AudiobookDetailsModal({
                         </svg>
                         Requesting...
                       </span>
-                    ) : !user ? 'Sign in to Request' : `Request ${requestFormat === 'epub' ? 'EPUB' : 'Audiobook'}`}
+                    ) : !user ? 'Sign in to Request' : `Request ${requestFormat === 'both' ? 'Both' : requestFormat === 'epub' ? 'EPUB' : 'Audiobook'}`}
                   </button>
                 ) : (
                   <button
                     disabled
                     className={`
                       w-full py-3 px-4 rounded-xl font-semibold
+                      ${audiobookAvailable || ebookAvailable ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30' : ''}
+                      ${hasEbookInProgress ? 'text-orange-700 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30' : ''}
                       ${status.type === 'processing' ? 'text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30' : ''}
                       ${status.type === 'pending' ? 'text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30' : ''}
                       ${status.type === 'denied' ? 'text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-900/30' : ''}
@@ -711,89 +893,13 @@ export function AudiobookDetailsModal({
                     )}
                     {status.type === 'pending' && status.label}
                     {status.type === 'denied' && 'Request Denied'}
+                    {hasEbookInProgress && 'EPUB In Progress'}
+                    {!hasEbookInProgress && status.type === 'available' && !ebookAvailable && 'Audiobook In Library'}
+                    {!hasEbookInProgress && status.type !== 'available' && ebookAvailable && !audiobookAvailable && 'EPUB In Library'}
+                    {!hasEbookInProgress && status.type === 'none' && !ebookAvailable && !audiobookAvailable && 'No request options available'}
                   </button>
                 )}
               </div>
-
-              {/* Interactive Search - only if not available and user has permission */}
-              {status.type !== 'available' && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false) && (
-                <button
-                  onClick={handleInteractiveSearch}
-                  disabled={!user}
-                  className="p-3 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
-                  title="Interactive Search"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </button>
-              )}
-
-              {/* Manual Import - admin only, hidden during active processing and completed states */}
-              {user?.role === 'admin' && !isAvailable && !['downloading', 'processing', 'searching', 'downloaded', 'completed', 'available'].includes(effectiveStatus || '') && (
-                <button
-                  onClick={() => setShowManualImport(true)}
-                  className="p-3 rounded-xl bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 hover:bg-teal-200 dark:hover:bg-teal-900/50 transition-colors"
-                  title="Manual Import"
-                >
-                  <FolderArrowDownIcon className="w-6 h-6" />
-                </button>
-              )}
-
-              {/* Ebook Buttons - only when available and enabled */}
-              {canShowEbookButtons && user && (
-                <>
-                  <button
-                    onClick={handleFetchEbook}
-                    disabled={isFetchingEbook}
-                    className="p-3 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors disabled:opacity-50"
-                    title="Grab Ebook"
-                  >
-                    {isFetchingEbook ? (
-                      <svg className="w-6 h-6 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                      </svg>
-                    )}
-                  </button>
-                  {(user?.role === 'admin' || user?.permissions?.interactiveSearch !== false) && (
-                    <button
-                      onClick={() => setShowInteractiveSearchEbook(true)}
-                      className="p-3 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
-                      title="Search Ebook Sources"
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                      </svg>
-                    </button>
-                  )}
-                </>
-              )}
-
-              {/* Ignore Toggle - always visible when user is logged in */}
-              {user && !isLoadingIgnore && (
-                <button
-                  onClick={handleToggleIgnore}
-                  disabled={isTogglingIgnore}
-                  className={`p-3 rounded-xl transition-colors disabled:opacity-50 ${
-                    isIgnored
-                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                      : 'bg-gray-100 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
-                  }`}
-                  title={isIgnored ? 'Stop Ignoring — auto-requests will resume for this book' : 'Ignore from Auto-Requests'}
-                >
-                  {isIgnored ? (
-                    <EyeSlashSolidIcon className="w-6 h-6" />
-                  ) : (
-                    <EyeSlashIcon className="w-6 h-6" />
-                  )}
-                </button>
-              )}
-
             </div>
 
             {/* Admin Actions Row (Approve / Search / Deny) — injected by admin pages */}

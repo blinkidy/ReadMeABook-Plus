@@ -46,7 +46,7 @@ Result: Douglas Adams/Stephen Fry/The Hitchhiker's Guide to the Galaxy/
 7. Copy cover art if found, else download from Audible
 8. **Coerce file formats** (if enabled) - rename .mp4 → .m4b and single-file .m4a → .m4b for Plex compatibility (see: Plex Format Coercion below)
 9. **Generate file hash** - SHA256 of sorted audio filenames for library matching (see: [fixes/file-hash-matching.md](../fixes/file-hash-matching.md))
-10. Update request status to `downloaded` and store file hash in `audiobooks.files_hash`
+10. Update audiobook request status to `downloaded` and store file hash in `audiobooks.files_hash`; ebook organization updates first-class ebook requests to `available`
 11. **Trigger filesystem scan** (if enabled) - tells Plex/ABS to scan for new files
 12. Originals remain until seeding requirements met
 

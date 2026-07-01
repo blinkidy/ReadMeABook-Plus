@@ -3,16 +3,19 @@
  * Documentation: documentation/integrations/audible.md
  *
  * Real-time matching between Audible books and library backends (Plex or Audiobookshelf).
- * ASIN-only matching for library availability checks (exact matches only).
+ * ASIN-first matching for library availability checks. BookOrbit-scanned ebook
+ * rows get a scoped title/author fallback because they may not have ASINs.
  */
 
 import { prisma } from '@/lib/db';
 import { LibraryItem } from '@/lib/services/library';
 import { getSiblingAsins } from '@/lib/services/works.service';
+import { cleanIndexerSearchTitle } from './search-title';
 import { RMABLogger } from './logger';
 
 // Module-level logger
 const logger = RMABLogger.create('AudiobookMatcher');
+const BOOKORBIT_GUID_PREFIX = 'bookorbit://';
 
 export interface AudiobookMatchInput {
   asin: string;
@@ -26,6 +29,33 @@ export interface AudiobookMatchResult {
   plexRatingKey: string | null;
   title: string;
   author: string;
+}
+
+function normalizeBookKey(value: string): string {
+  return cleanIndexerSearchTitle(value)
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function normalizeAuthorKey(value: string): string {
+  const primaryAuthor = value.split(/[,;]/)[0] || value;
+  return normalizeBookKey(primaryAuthor);
+}
+
+// Books often carry an Audible subtitle ("Title: A Novel") that local ebook
+// organizers (e.g. BookOrbit) drop from filenames, so compare the part
+// before the colon too rather than requiring an exact full-title match.
+function primaryTitleKey(value: string): string {
+  const primary = value.split(':')[0] || value;
+  return normalizeBookKey(primary);
+}
+
+function isUnknownAuthor(value: string): boolean {
+  const authorKey = normalizeAuthorKey(value);
+  return !authorKey || authorKey === 'unknown author' || authorKey === 'unknown';
 }
 
 /**
@@ -93,8 +123,23 @@ export async function findPlexMatch(
     result: null,
   };
 
-  // If no ASIN matches found, log and return null
+  // If no ASIN matches found, fall back to title/author only for BookOrbit
+  // rows that came from the local ebook library scanner.
   if (plexBooks.length === 0) {
+    const bookOrbitMatch = await findBookOrbitMatch(audiobook);
+    if (bookOrbitMatch) {
+      matchResult.matchType = 'bookorbit_title_author';
+      matchResult.matched = true;
+      matchResult.result = {
+        plexGuid: bookOrbitMatch.plexGuid,
+        plexTitle: bookOrbitMatch.title,
+        plexAuthor: bookOrbitMatch.author,
+        confidence: 90,
+      };
+      logger.debug('Matcher result', { MATCHER: matchResult });
+      return bookOrbitMatch;
+    }
+
     matchResult.matchType = 'no_asin_match';
     logger.debug('Matcher result', { MATCHER: matchResult });
     return null;
@@ -139,17 +184,126 @@ export async function findPlexMatch(
   return null;
 }
 
+export async function findBookOrbitMatch(
+  audiobook: AudiobookMatchInput,
+): Promise<AudiobookMatchResult | null> {
+  if (audiobook.asin) {
+    const asinMatch = await prisma.plexLibrary.findFirst({
+      where: {
+        plexLibraryId: 'bookorbit',
+        OR: [
+          { asin: audiobook.asin },
+          { plexGuid: { contains: audiobook.asin } },
+        ],
+      },
+      select: {
+        plexGuid: true,
+        plexRatingKey: true,
+        title: true,
+        author: true,
+      },
+    });
+    if (asinMatch) return asinMatch;
+  }
+
+  if (!audiobook.title || !audiobook.author) return null;
+
+  const titleKey = normalizeBookKey(audiobook.title);
+  const authorKey = normalizeAuthorKey(audiobook.author);
+  const primaryKey = primaryTitleKey(audiobook.title);
+  if (!titleKey || !authorKey) return null;
+
+  const candidates = await prisma.plexLibrary.findMany({
+    where: {
+      plexLibraryId: 'bookorbit',
+      plexGuid: { startsWith: BOOKORBIT_GUID_PREFIX },
+    },
+    select: {
+      plexGuid: true,
+      plexRatingKey: true,
+      title: true,
+      author: true,
+    },
+    take: 500,
+  });
+
+  const titleMatches = (candidates || []).filter((candidate) => (
+    normalizeBookKey(candidate.title) === titleKey ||
+    (primaryKey && primaryTitleKey(candidate.title) === primaryKey)
+  ));
+
+  const authorMatch = titleMatches.find((candidate) => (
+    normalizeAuthorKey(candidate.author) === authorKey
+  ));
+  if (authorMatch) return authorMatch;
+
+  const looseAuthorMatches = titleMatches.filter((candidate) => (
+    isUnknownAuthor(candidate.author) || isUnknownAuthor(audiobook.author)
+  ));
+
+  return looseAuthorMatches.length === 1 ? looseAuthorMatches[0] : null;
+}
+
+/**
+ * Combined match + per-format availability lookup, sharing a single
+ * plexLibrary query (mirrors findPlexMatch's own query/priority logic so
+ * `isAvailable`/`plexGuid` stay identical, without querying twice).
+ * `plexLibraryId: 'bookorbit'` rows are ebook-only; everything else
+ * (Plex/Audiobookshelf libraries) is audiobook.
+ */
+async function findMatchWithFormatAvailability(
+  audiobook: AudiobookMatchInput,
+): Promise<{ plexGuid: string | null; audiobookAvailable: boolean; ebookAvailable: boolean }> {
+  if (!audiobook.asin || audiobook.asin.trim() === '') {
+    return { plexGuid: null, audiobookAvailable: false, ebookAvailable: false };
+  }
+
+  const rows = await prisma.plexLibrary.findMany({
+    where: {
+      OR: [
+        { asin: audiobook.asin },
+        { plexGuid: { contains: audiobook.asin } },
+      ],
+    },
+    select: { plexGuid: true, asin: true, plexLibraryId: true },
+  });
+
+  if (rows.length === 0) {
+    // No direct ASIN match anywhere; the only fallback is BookOrbit's fuzzy
+    // title/author match, which is ebook-only (no fuzzy fallback for audiobooks).
+    const bookOrbitMatch = await findBookOrbitMatch(audiobook);
+    return {
+      plexGuid: bookOrbitMatch?.plexGuid || null,
+      audiobookAvailable: false,
+      ebookAvailable: !!bookOrbitMatch,
+    };
+  }
+
+  // Mirror findPlexMatch's priority for plexGuid: exact ASIN field match first,
+  // then ASIN-in-guid match.
+  const exactAsinMatch = rows.find((row) => row.asin?.toLowerCase() === audiobook.asin.toLowerCase());
+  const guidMatch = rows.find((row) => row.plexGuid?.includes(audiobook.asin));
+
+  return {
+    plexGuid: exactAsinMatch?.plexGuid || guidMatch?.plexGuid || null,
+    audiobookAvailable: rows.some((row) => row.plexLibraryId !== 'bookorbit'),
+    ebookAvailable: rows.some((row) => row.plexLibraryId === 'bookorbit'),
+  };
+}
+
 /**
  * Enrich an Audible audiobook with Plex library match information.
  * Used by API routes to add availability status to responses.
  */
 export async function enrichAudiobookWithMatch(audiobook: AudiobookMatchInput & Record<string, any>) {
-  const match = await findPlexMatch(audiobook);
+  const { plexGuid, audiobookAvailable, ebookAvailable } = await findMatchWithFormatAvailability(audiobook);
 
   return {
     ...audiobook,
-    isAvailable: match !== null,
-    plexGuid: match?.plexGuid || null,
+    isAvailable: audiobookAvailable || ebookAvailable,
+    plexGuid,
+    audiobookAvailable,
+    ebookAvailable,
   };
 }
 
@@ -237,7 +391,8 @@ export async function enrichAudiobooksWithMatches(
   // Always enrich with request status (check ANY user's requests)
   const asins = audiobooks.map(book => book.asin);
 
-  // Get all audiobook records for these ASINs with ALL audiobook requests (not ebook requests)
+  // Get all audiobook records for these ASINs with ALL request types.
+  // First-class ebook requests count as ownership once fulfilled.
   const audiobookRecords = await prisma.audiobook.findMany({
     where: {
       audibleAsin: { in: asins },
@@ -248,7 +403,7 @@ export async function enrichAudiobooksWithMatches(
       requests: {
         where: {
           deletedAt: null, // Only include active (non-deleted) requests
-          type: 'audiobook', // Only check audiobook requests, not ebook requests
+          type: { in: ['audiobook', 'ebook'] },
         },
         select: {
           id: true,
@@ -331,23 +486,35 @@ export async function enrichAudiobooksWithMatches(
 /**
  * Get all ASINs that are considered "available" — present in library or have completed requests.
  * Used by paginated API routes to exclude available items at the DB level.
+ *
+ * @param format - When provided, restricts the check to just that format
+ *   ('audiobook': Plex/Audiobookshelf library rows + fulfilled audiobook requests;
+ *   'ebook': BookOrbit library rows + fulfilled ebook requests). Omit for the
+ *   original combined behavior (either format).
  */
-export async function getAvailableAsins(): Promise<Set<string>> {
+export async function getAvailableAsins(format?: 'audiobook' | 'ebook'): Promise<Set<string>> {
+  const libraryWhere = format === 'ebook'
+    ? { asin: { not: null }, plexLibraryId: 'bookorbit' }
+    : format === 'audiobook'
+      ? { asin: { not: null }, plexLibraryId: { not: 'bookorbit' } }
+      : { asin: { not: null } };
+  const requestTypes: Array<'audiobook' | 'ebook'> = format ? [format] : ['audiobook', 'ebook'];
+
   const [libraryItems, completedRequests] = await Promise.all([
-    // ASINs present in the library (Plex or Audiobookshelf)
+    // ASINs present in the library (Plex or Audiobookshelf), scoped by format when given
     prisma.plexLibrary.findMany({
-      where: { asin: { not: null } },
+      where: libraryWhere,
       select: { asin: true },
       distinct: ['asin'],
     }),
-    // ASINs with completed audiobook requests
+    // ASINs with fulfilled requests of the relevant type(s)
     prisma.audiobook.findMany({
       where: {
         audibleAsin: { not: null },
         requests: {
           some: {
-            status: 'completed',
-            type: 'audiobook',
+            status: { in: ['available', 'downloaded'] },
+            type: { in: requestTypes },
             deletedAt: null,
           },
         },

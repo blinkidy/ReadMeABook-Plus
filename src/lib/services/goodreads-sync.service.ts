@@ -18,6 +18,7 @@ import {
   ShelfSyncOptions,
   createEmptyStats,
   resolveMaxLookups,
+  resolveShelfRequestMediaType,
   processShelfBooks,
 } from '@/lib/services/shelf-sync-core.service';
 
@@ -150,9 +151,10 @@ export async function processGoodreadsShelves(
       }
 
       log.info(`Found ${rssData.books.length} books in shelf "${shelf.name}"${!shelf.autoRequest ? ' (auto-request disabled)' : ''}`);
+      const requestMediaType = resolveShelfRequestMediaType(shelf.name);
 
       const bookData = await processShelfBooks(
-        'goodreads', rssData.books, shelf.user.id, shelf.id, stats, log, maxLookups, shelf.autoRequest,
+        'goodreads', rssData.books, shelf.user.id, shelf.id, stats, log, maxLookups, shelf.autoRequest, requestMediaType,
       );
 
       await prisma.goodreadsShelf.update({

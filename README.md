@@ -81,12 +81,14 @@ services:
       - ./downloads:/downloads        # Your download client's path
       - ./media:/media                # Your audiobook library
       - ./bookorbit-ingest:/bookorbit/ingest  # Your BookOrbit ingest folder
+      - ./bookorbit-library:/bookorbit/library:ro  # Your finished BookOrbit library
       - ./pgdata:/var/lib/postgresql/data
       - ./redis:/var/lib/redis
     environment:
       PUID: 1000                      # Optional: your user ID
       PGID: 1000                      # Optional: your group ID
       BOOKORBIT_INGEST_PATH: "/bookorbit/ingest"  # EPUB destination
+      BOOKORBIT_LIBRARY_PATH: "/bookorbit/library"  # Availability scan source
       PUBLIC_URL: "https://audiobooks.example.com"  # Required for OAuth
 ```
 
@@ -94,7 +96,7 @@ Then run `docker compose up -d` to start.
 
 **Important:** Your download client (qBittorrent/SABnzbd) and RMAB must see files at the same path. See the [Volume Mapping Guide](documentation/deployment/volume-mapping.md) if downloads aren't being detected.
 
-EPUB requests use `BOOKORBIT_INGEST_PATH` or the EPUB Destination Path in Settings. Leave it unset to fall back to the audiobook media directory.
+EPUB requests use `BOOKORBIT_INGEST_PATH` or the EPUB Destination Path in Settings. BookOrbit availability scanning uses `BOOKORBIT_LIBRARY_PATH` for the finished library; leave it unset only if files remain in the ingest folder.
 
 ## Screenshots
 

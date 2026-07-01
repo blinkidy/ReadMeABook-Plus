@@ -225,7 +225,7 @@ model Request {
   status           String    @default("pending")
   // Status values: pending, awaiting_approval, denied, searching, downloading, processing, downloaded, available, failed, cancelled, awaiting_search, awaiting_import, awaiting_release, warn
   // Flow (audiobook): pending → searching → downloading → processing → downloaded → available (when matched in Plex)
-  // Flow (ebook): pending → searching → downloading → processing → downloaded (terminal - no available state)
+  // Flow (ebook): pending → searching → downloading → processing → available (BookOrbit file organized)
   progress         Int       @default(0) // 0-100
   priority         Int       @default(0)
   errorMessage     String?   @map("error_message") @db.Text

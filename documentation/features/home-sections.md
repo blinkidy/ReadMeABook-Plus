@@ -35,7 +35,7 @@ Users customize their home page by adding/removing/reordering sections. Each sec
 
 ## AudibleService Methods
 - `getCategories()`: Scrapes `{baseUrl}/categories`, returns `{id, name}[]`
-- `getCategoryBooks(categoryId, limit)`: Scrapes `/search?node={id}&pageSize=50&sort=popularity-rank`, up to 200 results
+- `getCategoryBooks(categoryId, limit)`: Scrapes `/charts/best/category-audiobooks/{id}?pageSize=50`, up to 200 genre bestseller-chart results
 
 ## Frontend
 - **Hooks:** `useHomeSections()`, `useCategoryAudiobooks()`, `useAudibleCategories()` in `src/lib/hooks/useHomeSections.ts`

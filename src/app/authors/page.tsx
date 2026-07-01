@@ -57,7 +57,7 @@ function AuthorsPageContent() {
               Browse Authors
             </h1>
             <p className="text-gray-600 dark:text-gray-400">
-              Search for your favorite audiobook authors
+              Search for authors of audiobooks and books
             </p>
           </div>
 
@@ -83,7 +83,7 @@ function AuthorsPageContent() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by author name..."
+                placeholder="Search audiobook and book authors..."
                 className="w-full pl-12 pr-12 py-4 text-lg border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400"
                 autoFocus
               />
@@ -157,7 +157,7 @@ function AuthorsPageContent() {
                 Start typing to search for authors
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-500">
-                Search by author name to discover their works
+                Search by author name to discover audiobooks and books
               </p>
             </div>
           )}

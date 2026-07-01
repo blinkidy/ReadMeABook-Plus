@@ -25,6 +25,7 @@ const jobQueueMock = vi.hoisted(() => ({
 
 vi.mock('@/lib/utils/audiobook-matcher', () => ({
   findPlexMatch: vi.fn(),
+  findBookOrbitMatch: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@/lib/services/job-queue.service', () => ({

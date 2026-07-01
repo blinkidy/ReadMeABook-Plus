@@ -92,8 +92,10 @@ interface HomeSectionProps {
   sectionRef: React.RefObject<HTMLElement | null>;
   cardSize: number;
   squareCovers: boolean;
-  hideAvailable: boolean;
-  onToggleHideAvailable: (v: boolean) => void;
+  hideAudiobookAvailable: boolean;
+  hideEbookAvailable: boolean;
+  onToggleHideAudiobookAvailable: (v: boolean) => void;
+  onToggleHideEbookAvailable: (v: boolean) => void;
   onToggleSquareCovers: (v: boolean) => void;
   onCardSizeChange: (v: number) => void;
   onConfigOpen?: () => void;
@@ -104,16 +106,18 @@ interface HomeSectionProps {
 function PopularOrNewSection({
   type,
   page,
-  hideAvailable,
+  hideAudiobookAvailable,
+  hideEbookAvailable,
   onTotalPagesChange,
   ...renderProps
 }: {
   type: 'popular' | 'new-releases';
   page: number;
-  hideAvailable: boolean;
+  hideAudiobookAvailable: boolean;
+  hideEbookAvailable: boolean;
   onTotalPagesChange?: (totalPages: number) => void;
 } & RenderSectionProps) {
-  const { audiobooks, isLoading, totalPages, message } = useAudiobooks(type, 20, page, hideAvailable);
+  const { audiobooks, isLoading, totalPages, message } = useAudiobooks(type, 20, page, hideAudiobookAvailable, hideEbookAvailable);
 
   useEffect(() => {
     onTotalPagesChange?.(totalPages);
@@ -133,20 +137,23 @@ function PopularOrNewSection({
 function CategorySection({
   categoryId,
   page,
-  hideAvailable,
+  hideAudiobookAvailable,
+  hideEbookAvailable,
   onTotalPagesChange,
   ...renderProps
 }: {
   categoryId: string;
   page: number;
-  hideAvailable: boolean;
+  hideAudiobookAvailable: boolean;
+  hideEbookAvailable: boolean;
   onTotalPagesChange?: (totalPages: number) => void;
 } & RenderSectionProps) {
   const { audiobooks, isLoading, totalPages, message } = useCategoryAudiobooks(
     categoryId,
     20,
     page,
-    hideAvailable
+    hideAudiobookAvailable,
+    hideEbookAvailable
   );
 
   useEffect(() => {
@@ -228,8 +235,10 @@ export function HomeSection({
   sectionRef,
   cardSize,
   squareCovers,
-  hideAvailable,
-  onToggleHideAvailable,
+  hideAudiobookAvailable,
+  hideEbookAvailable,
+  onToggleHideAudiobookAvailable,
+  onToggleHideEbookAvailable,
   onToggleSquareCovers,
   onCardSizeChange,
   onConfigOpen,
@@ -252,8 +261,10 @@ export function HomeSection({
               {title}
             </h2>
             <SectionToolbar
-              hideAvailable={hideAvailable}
-              onToggleHideAvailable={onToggleHideAvailable}
+              hideAudiobookAvailable={hideAudiobookAvailable}
+              onToggleHideAudiobookAvailable={onToggleHideAudiobookAvailable}
+              hideEbookAvailable={hideEbookAvailable}
+              onToggleHideEbookAvailable={onToggleHideEbookAvailable}
               squareCovers={squareCovers}
               onToggleSquareCovers={onToggleSquareCovers}
               cardSize={cardSize}
@@ -279,7 +290,8 @@ export function HomeSection({
           <PopularOrNewSection
             type="popular"
             page={page}
-            hideAvailable={hideAvailable}
+            hideAudiobookAvailable={hideAudiobookAvailable}
+            hideEbookAvailable={hideEbookAvailable}
             onTotalPagesChange={onTotalPagesChange}
             {...renderProps}
           />
@@ -288,7 +300,8 @@ export function HomeSection({
           <PopularOrNewSection
             type="new-releases"
             page={page}
-            hideAvailable={hideAvailable}
+            hideAudiobookAvailable={hideAudiobookAvailable}
+            hideEbookAvailable={hideEbookAvailable}
             onTotalPagesChange={onTotalPagesChange}
             {...renderProps}
           />
@@ -297,7 +310,8 @@ export function HomeSection({
           <CategorySection
             categoryId={categoryId}
             page={page}
-            hideAvailable={hideAvailable}
+            hideAudiobookAvailable={hideAudiobookAvailable}
+            hideEbookAvailable={hideEbookAvailable}
             onTotalPagesChange={onTotalPagesChange}
             {...renderProps}
           />

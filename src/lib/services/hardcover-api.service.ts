@@ -327,3 +327,93 @@ export async function fetchHardcoverList(
     return { listName, books: allBooks };
   }
 }
+
+export interface HardcoverSearchResult {
+  hardcoverId: string;
+  title: string;
+  author: string;
+  coverUrl?: string;
+  isbn?: string;
+  description?: string;
+  slug?: string;
+}
+
+export const HARDCOVER_SEARCH_PAGE_SIZE = 20;
+
+// Hardcover's `search` query proxies their Typesense catalog index. It returns
+// a raw `results` JSON blob (Typesense response shape: { found, hits: [{ document }] } )
+// rather than typed GraphQL fields, so parsing here is defensive.
+function extractSearchResults(results: any): HardcoverSearchResult[] {
+  const hits = results?.hits;
+  if (!Array.isArray(hits)) return [];
+
+  const books: HardcoverSearchResult[] = [];
+  for (const hit of hits) {
+    const doc = hit?.document || hit;
+    if (!doc || doc.id === undefined || doc.id === null) continue;
+
+    const authorNames: string[] | undefined = doc.author_names || doc.authorNames;
+    const author = Array.isArray(authorNames) && authorNames.length > 0
+      ? authorNames[0]
+      : (doc.author?.name || 'Unknown Author');
+
+    const image = doc.image;
+    const coverUrl = (typeof image === 'string' ? image : image?.url) || doc.cached_image || undefined;
+
+    const isbns: string[] | undefined = doc.isbns;
+    const isbn = Array.isArray(isbns) && isbns.length > 0 ? isbns[0] : undefined;
+
+    books.push({
+      hardcoverId: String(doc.id),
+      title: doc.title || 'Unknown Title',
+      author,
+      coverUrl,
+      isbn,
+      description: doc.description || undefined,
+      slug: doc.slug || undefined,
+    });
+  }
+  return books;
+}
+
+/**
+ * Search Hardcover's book catalog by title/author using their Typesense-backed
+ * `search` GraphQL query. Used for discovering books that have no audiobook
+ * edition (and therefore never surface via Audible search).
+ */
+export async function searchHardcoverBooks(
+  apiToken: string,
+  query: string,
+  page: number = 1,
+): Promise<{ books: HardcoverSearchResult[]; found: number }> {
+  const graphqlQuery = `
+    query SearchBooks($query: String!, $page: Int!, $perPage: Int!) {
+      search(query: $query, query_type: "books", page: $page, per_page: $perPage, sort: "activities_count:desc") {
+        results
+      }
+    }
+  `;
+
+  const response = await axios.post(
+    HARDCOVER_API_URL,
+    { query: graphqlQuery, variables: { query, page, perPage: HARDCOVER_SEARCH_PAGE_SIZE } },
+    {
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        'Content-Type': 'application/json',
+        'User-Agent': RMAB_USER_AGENT,
+      },
+      timeout: 30000,
+    },
+  );
+
+  if (response.data?.errors) {
+    throw new Error(`Hardcover API Error: ${response.data.errors[0]?.message}`);
+  }
+
+  const results = response.data?.data?.search?.results;
+  const books = extractSearchResults(results);
+  const found = typeof results?.found === 'number' ? results.found : books.length;
+
+  return { books, found };
+}

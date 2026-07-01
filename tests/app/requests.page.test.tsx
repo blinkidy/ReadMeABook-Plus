@@ -58,7 +58,7 @@ describe('RequestsPage', () => {
     render(<RequestsPage />);
 
     expect(screen.getByText('Authentication Required')).toBeInTheDocument();
-    expect(screen.getByText('Please log in to view your audiobook requests')).toBeInTheDocument();
+    expect(screen.getByText('Please log in to view your book requests')).toBeInTheDocument();
   });
 
   it('filters requests by status and updates tab counts', async () => {

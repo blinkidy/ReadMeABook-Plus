@@ -38,6 +38,7 @@ const JOB_DESCRIPTIONS: Record<string, string> = {
   retry_missing_torrents: 'Retries searches for requests that previously found no results.',
   retry_failed_imports: 'Re-attempts import for downloads that failed to organize.',
   find_missing_ebooks: 'Looks for ebook companions to audiobooks you already have.',
+  bookorbit_library_scan: 'Scans your BookOrbit ebook library so owned books show as available.',
   cleanup_seeded_torrents: "Removes torrents once they've met your seeding requirements.",
   monitor_rss_feeds: 'Watches indexer RSS feeds for matches against pending requests.',
   sync_reading_shelves: 'Pulls new books from your Goodreads/Hardcover shelves.',

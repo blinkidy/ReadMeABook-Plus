@@ -58,7 +58,7 @@ function SeriesPageContent() {
               Browse Series
             </h1>
             <p className="text-gray-600 dark:text-gray-400">
-              Search for your favorite audiobook series
+              Search for audiobook and book series
             </p>
           </div>
 
@@ -84,7 +84,7 @@ function SeriesPageContent() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by series name..."
+                placeholder="Search audiobook and book series..."
                 className="w-full pl-12 pr-12 py-4 text-lg border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400"
                 autoFocus
               />
@@ -160,7 +160,7 @@ function SeriesPageContent() {
                 Start typing to search for series
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-500">
-                Search by series name to discover audiobook collections
+                Search by series name to discover audiobook and book collections
               </p>
             </div>
           )}

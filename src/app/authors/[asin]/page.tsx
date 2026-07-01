@@ -32,7 +32,11 @@ export default function AuthorDetailPage({
     asin,
     author?.name || null
   );
-  const { cardSize, setCardSize, squareCovers, setSquareCovers, hideAvailable, setHideAvailable } = usePreferences();
+  const {
+    cardSize, setCardSize, squareCovers, setSquareCovers,
+    hideAudiobookAvailable, setHideAudiobookAvailable,
+    hideEbookAvailable, setHideEbookAvailable,
+  } = usePreferences();
 
   const handleBack = useCallback(() => {
     // Use browser back if we came from within the app, otherwise fallback to /authors
@@ -43,10 +47,14 @@ export default function AuthorDetailPage({
     }
   }, [router]);
 
-  // Filter out available titles when hideAvailable is enabled
+  // Filter out titles already owned in a format the user wants hidden
   const filteredBooks = useMemo(
-    () => hideAvailable ? books.filter((b: Audiobook) => !b.isAvailable && b.requestStatus !== 'completed') : books,
-    [books, hideAvailable]
+    () => books.filter((b: Audiobook) => {
+      if (hideAudiobookAvailable && (b.audiobookAvailable || b.requestStatus === 'completed')) return false;
+      if (hideEbookAvailable && b.ebookAvailable) return false;
+      return true;
+    }),
+    [books, hideAudiobookAvailable, hideEbookAvailable]
   );
 
   // Header count text: reflects filtered counts
@@ -112,8 +120,10 @@ export default function AuthorDetailPage({
                       </span>
                     )}
                     <SectionToolbar
-                      hideAvailable={hideAvailable}
-                      onToggleHideAvailable={setHideAvailable}
+                      hideAudiobookAvailable={hideAudiobookAvailable}
+                      onToggleHideAudiobookAvailable={setHideAudiobookAvailable}
+                      hideEbookAvailable={hideEbookAvailable}
+                      onToggleHideEbookAvailable={setHideEbookAvailable}
                       squareCovers={squareCovers}
                       onToggleSquareCovers={setSquareCovers}
                       cardSize={cardSize}

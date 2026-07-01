@@ -33,6 +33,7 @@ vi.mock('@/lib/services/job-queue.service', () => ({
 
 vi.mock('@/lib/utils/audiobook-matcher', () => ({
   findPlexMatch: findPlexMatchMock,
+  findBookOrbitMatch: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@/lib/integrations/audible.service', () => ({

@@ -10,7 +10,9 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 interface Preferences {
   cardSize: number; // 1-9, default 5
   squareCovers: boolean; // true = square (1:1), false = rectangle (2:3)
-  hideAvailable: boolean; // true = hide "In Your Library" titles
+  hideAvailable?: boolean; // legacy combined toggle, migrated to the two below
+  hideAudiobookAvailable: boolean; // true = hide titles already owned as an audiobook
+  hideEbookAvailable: boolean; // true = hide titles already owned as an ebook
 }
 
 interface PreferencesContextType {
@@ -18,8 +20,10 @@ interface PreferencesContextType {
   setCardSize: (size: number) => void;
   squareCovers: boolean;
   setSquareCovers: (enabled: boolean) => void;
-  hideAvailable: boolean;
-  setHideAvailable: (enabled: boolean) => void;
+  hideAudiobookAvailable: boolean;
+  setHideAudiobookAvailable: (enabled: boolean) => void;
+  hideEbookAvailable: boolean;
+  setHideEbookAvailable: (enabled: boolean) => void;
 }
 
 const PreferencesContext = createContext<PreferencesContextType | undefined>(undefined);
@@ -27,15 +31,33 @@ const PreferencesContext = createContext<PreferencesContextType | undefined>(und
 const DEFAULT_PREFERENCES: Preferences = {
   cardSize: 5,
   squareCovers: true,
-  hideAvailable: false,
+  hideAudiobookAvailable: false,
+  hideEbookAvailable: false,
 };
 
 const STORAGE_KEY = 'preferences';
 
+// Migrate the old combined "hideAvailable" toggle (hid a title if either
+// format was owned) to both new toggles, so existing users keep the same
+// effective behavior after upgrading.
+function resolveHideToggles(preferences: Preferences): { hideAudiobookAvailable: boolean; hideEbookAvailable: boolean } {
+  if (preferences.hideAudiobookAvailable !== undefined || preferences.hideEbookAvailable !== undefined) {
+    return {
+      hideAudiobookAvailable: preferences.hideAudiobookAvailable ?? DEFAULT_PREFERENCES.hideAudiobookAvailable,
+      hideEbookAvailable: preferences.hideEbookAvailable ?? DEFAULT_PREFERENCES.hideEbookAvailable,
+    };
+  }
+  if (preferences.hideAvailable) {
+    return { hideAudiobookAvailable: true, hideEbookAvailable: true };
+  }
+  return { hideAudiobookAvailable: false, hideEbookAvailable: false };
+}
+
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [cardSize, setCardSizeState] = useState<number>(DEFAULT_PREFERENCES.cardSize);
   const [squareCovers, setSquareCoversState] = useState<boolean>(DEFAULT_PREFERENCES.squareCovers);
-  const [hideAvailable, setHideAvailableState] = useState<boolean>(DEFAULT_PREFERENCES.hideAvailable);
+  const [hideAudiobookAvailable, setHideAudiobookAvailableState] = useState<boolean>(DEFAULT_PREFERENCES.hideAudiobookAvailable);
+  const [hideEbookAvailable, setHideEbookAvailableState] = useState<boolean>(DEFAULT_PREFERENCES.hideEbookAvailable);
 
   // Load preferences from localStorage on mount
   useEffect(() => {
@@ -54,14 +76,17 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         }
         // Load squareCovers preference (defaults to false if not set)
         setSquareCoversState(preferences.squareCovers ?? DEFAULT_PREFERENCES.squareCovers);
-        // Load hideAvailable preference
-        setHideAvailableState(preferences.hideAvailable ?? DEFAULT_PREFERENCES.hideAvailable);
+        // Load hide toggles, migrating the legacy combined toggle if present
+        const { hideAudiobookAvailable: hideAB, hideEbookAvailable: hideEB } = resolveHideToggles(preferences);
+        setHideAudiobookAvailableState(hideAB);
+        setHideEbookAvailableState(hideEB);
       }
     } catch (error) {
       console.error('Failed to load preferences from localStorage:', error);
       setCardSizeState(DEFAULT_PREFERENCES.cardSize);
       setSquareCoversState(DEFAULT_PREFERENCES.squareCovers);
-      setHideAvailableState(DEFAULT_PREFERENCES.hideAvailable);
+      setHideAudiobookAvailableState(DEFAULT_PREFERENCES.hideAudiobookAvailable);
+      setHideEbookAvailableState(DEFAULT_PREFERENCES.hideEbookAvailable);
     }
   }, []);
 
@@ -100,16 +125,34 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Update hideAvailable preference in state and localStorage
-  const setHideAvailable = (enabled: boolean) => {
+  // Update hideAudiobookAvailable preference in state and localStorage
+  const setHideAudiobookAvailable = (enabled: boolean) => {
     if (typeof window === 'undefined') return;
 
-    setHideAvailableState(enabled);
+    setHideAudiobookAvailableState(enabled);
 
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       const preferences: Preferences = stored ? JSON.parse(stored) : { ...DEFAULT_PREFERENCES };
-      preferences.hideAvailable = enabled;
+      preferences.hideAudiobookAvailable = enabled;
+      delete preferences.hideAvailable;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+    } catch (error) {
+      console.error('Failed to save preferences to localStorage:', error);
+    }
+  };
+
+  // Update hideEbookAvailable preference in state and localStorage
+  const setHideEbookAvailable = (enabled: boolean) => {
+    if (typeof window === 'undefined') return;
+
+    setHideEbookAvailableState(enabled);
+
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      const preferences: Preferences = stored ? JSON.parse(stored) : { ...DEFAULT_PREFERENCES };
+      preferences.hideEbookAvailable = enabled;
+      delete preferences.hideAvailable;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
     } catch (error) {
       console.error('Failed to save preferences to localStorage:', error);
@@ -130,8 +173,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
           }
           // Sync squareCovers preference
           setSquareCoversState(preferences.squareCovers ?? DEFAULT_PREFERENCES.squareCovers);
-          // Sync hideAvailable preference
-          setHideAvailableState(preferences.hideAvailable ?? DEFAULT_PREFERENCES.hideAvailable);
+          // Sync hide toggles
+          const { hideAudiobookAvailable: hideAB, hideEbookAvailable: hideEB } = resolveHideToggles(preferences);
+          setHideAudiobookAvailableState(hideAB);
+          setHideEbookAvailableState(hideEB);
         } catch (error) {
           console.error('Failed to parse preferences from storage event:', error);
         }
@@ -145,7 +190,16 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <PreferencesContext.Provider value={{ cardSize, setCardSize, squareCovers, setSquareCovers, hideAvailable, setHideAvailable }}>
+    <PreferencesContext.Provider value={{
+      cardSize,
+      setCardSize,
+      squareCovers,
+      setSquareCovers,
+      hideAudiobookAvailable,
+      setHideAudiobookAvailable,
+      hideEbookAvailable,
+      setHideEbookAvailable,
+    }}>
       {children}
     </PreferencesContext.Provider>
   );

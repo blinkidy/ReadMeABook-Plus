@@ -151,6 +151,45 @@ describe('InteractiveTorrentSearchModal', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('prefills and searches with a cleaned promotional title for new audiobook searches', async () => {
+    searchByAudiobookMock.mockResolvedValueOnce([]);
+    const { InteractiveTorrentSearchModal } = await import('@/components/requests/InteractiveTorrentSearchModal');
+
+    render(
+      <InteractiveTorrentSearchModal
+        isOpen={true}
+        onClose={vi.fn()}
+        audiobook={{ title: 'Yesteryear A GMA Book Club Pick', author: 'Caro Claire Burke' }}
+        fullAudiobook={{ asin: 'B00YESTERYEAR', title: 'Yesteryear A GMA Book Club Pick', author: 'Caro Claire Burke' } as any}
+      />
+    );
+
+    expect(screen.getByPlaceholderText('Search title...')).toHaveValue('Yesteryear');
+    await waitFor(() => {
+      expect(searchByAudiobookMock).toHaveBeenCalledWith('Yesteryear', 'Caro Claire Burke', 'B00YESTERYEAR');
+    });
+  });
+
+  it('cleans saved custom search terms before request interactive search', async () => {
+    searchByRequestMock.mockResolvedValueOnce([]);
+    const { InteractiveTorrentSearchModal } = await import('@/components/requests/InteractiveTorrentSearchModal');
+
+    render(
+      <InteractiveTorrentSearchModal
+        isOpen={true}
+        onClose={vi.fn()}
+        requestId="req-yesteryear"
+        audiobook={{ title: 'Yesteryear A GMA Book Club Pick', author: 'Caro Claire Burke' }}
+        customSearchTerms="Yesteryear A GMA Book Club Pick"
+      />
+    );
+
+    expect(screen.getByPlaceholderText('Search title...')).toHaveValue('Yesteryear');
+    await waitFor(() => {
+      expect(searchByRequestMock).toHaveBeenCalledWith('req-yesteryear', 'Yesteryear');
+    });
+  });
+
   it('uses a custom title when pressing Enter', async () => {
     searchByRequestMock.mockResolvedValueOnce([]);
     searchByRequestMock.mockResolvedValueOnce([]);

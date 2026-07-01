@@ -29,8 +29,11 @@ export function EbookTab({ ebook, onChange, onSuccess, onError, markAsSaved }: E
     saving,
     testingFlaresolverr,
     flaresolverrTestResult,
+    testingHardcover,
+    hardcoverTestResult,
     updateEbook,
     testFlaresolverrConnection,
+    testHardcoverConnection,
     saveSettings,
     isAnySourceEnabled,
   } = useEbookSettings({ ebook, onChange, onSuccess, onError, markAsSaved });
@@ -150,6 +153,62 @@ export function EbookTab({ ebook, onChange, onSuccess, onError, markAsSaved }: E
               </div>
             </>
           )}
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION: BOOK SEARCH (HARDCOVER)
+          ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <div className="bg-gray-50 dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
+            Book Search (Hardcover)
+          </h3>
+        </div>
+        <div className="p-4 space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Some books have no audiobook edition and never show up in Audible search. Add a
+            Hardcover.app API key to let all users search Hardcover&apos;s catalog and request
+            those books as EPUB. This key is shared instance-wide — separate from any personal
+            Hardcover token used for shelf-sync.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Hardcover API Key
+            </label>
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                value={ebook.hardcoverSearchApiKey || ''}
+                onChange={(e) => updateEbook('hardcoverSearchApiKey', e.target.value)}
+                placeholder="Paste your Hardcover API key"
+                className="font-mono flex-1"
+              />
+              <Button
+                onClick={testHardcoverConnection}
+                loading={testingHardcover}
+                variant="secondary"
+                className="whitespace-nowrap"
+              >
+                Test
+              </Button>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Generate a key from your Hardcover account settings at hardcover.app.
+            </p>
+            {hardcoverTestResult && (
+              <div
+                className={`mt-2 p-3 rounded-lg text-sm ${
+                  hardcoverTestResult.success
+                    ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800'
+                }`}
+              >
+                {hardcoverTestResult.success ? '✓ ' : '✗ '}
+                {hardcoverTestResult.message}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

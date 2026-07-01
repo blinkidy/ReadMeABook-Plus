@@ -13,6 +13,7 @@ import { getLanguageForRegion } from '@/lib/constants/language-config';
 import type { AudibleRegion } from '@/lib/types/audible';
 import { RMABLogger } from '@/lib/utils/logger';
 import { resolveInteractiveSearchAccess } from '@/lib/utils/permissions';
+import { cleanIndexerSearchTitle } from '@/lib/utils/search-title';
 
 const logger = RMABLogger.create('API.InteractiveSearch');
 
@@ -126,7 +127,9 @@ export async function POST(
       }
 
       // Use custom title if provided, then custom search terms, then audiobook's title
-      const searchTitle = customTitle || requestRecord.customSearchTerms || requestRecord.audiobook.title;
+      const searchTitle = cleanIndexerSearchTitle(
+        customTitle || requestRecord.customSearchTerms || requestRecord.audiobook.title
+      );
       const searchAuthor = requestRecord.audiobook.author;
 
       logger.info(`Searching ${indexersConfig.length - skippedIndexers.length} enabled indexers in ${groups.length} group${groups.length > 1 ? 's' : ''}`, { searchTitle });

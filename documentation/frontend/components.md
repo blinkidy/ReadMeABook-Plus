@@ -23,14 +23,14 @@ src/components/
 ## Key Components
 
 **Layout**
-- **Header** ✅ - Top nav, search input, user menu with "Change Password" option (local users only), logout
+- **Header** ✅ - Top nav, always-visible authenticated search input, user menu with "Change Password" option (local users only), logout
 - **Sidebar** - Admin side nav
 - **Footer** - Version, links
 
 **Audiobooks**
-- **AudiobookCard** ✅ - Cover, title, author, narrator, duration, request button, clickable to open details modal. Shows "Requested by [username]" when someone else has requested the book, "Requested" when current user has requested it
+- **AudiobookCard** ✅ - Cover, title, author, narrator, duration, clickable to open details modal. Request actions live in details modal for touch-first use. Shows "Requested by [username]" when someone else has requested the book, "Requested" when current user has requested it. Corner badges show a headphone icon when the audiobook is available in-library and a book icon when the ebook is available, so users can browse for "have one format, want the other."
 - **AudiobookGrid** - Responsive grid (1/2/3/4 cols)
-- **AudiobookDetailsModal** ✅ - Full-screen modal with comprehensive metadata (description, genres, rating, release date, narrator, language, format, publisher, request functionality). Shows requesting user's name when applicable
+- **AudiobookDetailsModal** ✅ - Full-screen modal with comprehensive metadata (description, genres, rating, release date, narrator, language, format, publisher, request functionality). Shows requesting user's name when applicable. Request actions are format-aware: offer only missing audiobook/EPUB formats, include `Both` when neither exists, and hide request actions when both are available. Long summaries are clamped to 4 lines with a "Read more"/"Show less" toggle driven by `useIsClamped` (real `scrollHeight`/`clientHeight` overflow measurement, not a character-count guess — the same text wraps into more lines on narrower mobile viewports). On mobile only, the Interactive Search and Ignore Toggle icons move to a smaller upper-left corner row and Manual Import is hidden; desktop keeps the original bottom action bar.
 
 **Requests**
 - **RequestCard** ✅ - Cover, title, author, status badge, progress bar, timestamps, action buttons (cancel, manual search, interactive search). When status=`awaiting_release` and `releaseDate` is set, shows "Releases &lt;Mon DD, YYYY&gt;" next to the status badge (UTC-formatted)
@@ -38,6 +38,9 @@ src/components/
 - **ProgressBar** - Animated fill with percentage
 - **InteractiveTorrentSearchModal** ✅ - Responsive table of ranked torrent results, uses ConfirmModal for downloads, hides columns on smaller screens (size on mobile, seeds on tablet, indexer on desktop). Titles render verbatim; bracketed tags (e.g. `[German]`, `[Unabridged]`) parsed via `extractTitleTags` render as slate chips in the metadata row (de-duped vs `displayFormat`); an explicit chevron-disclosure button toggles per-`guid` expand only when the title is truncated (via `useIsTruncated`), state resets on close
 - Active indicator: "Setting up..." with spinner when progress = 0%, "Active" with pulsing dot when progress > 0%
+
+**Browse/Home**
+- **SectionToolbar** ✅ - Per-section controls: two independent "hide owned" toggles (headphones icon = hide owned audiobooks, book icon = hide owned ebooks, each shows a slash overlay when active), square-covers toggle, card-size slider. Replaced a single combined "hide available" toggle so users can browse for "have ebook, want audiobook" and vice versa.
 
 **Forms**
 - **SearchBar** - Debounced input with suggestions

@@ -22,7 +22,7 @@ const STALE_NAME_REWRITES: ReadonlyArray<{
   { type: 'plex_recently_added_check', staleName: 'Plex Recently Added Check', neutralName: 'Recently Added Check' },
 ];
 
-export type ScheduledJobType = 'plex_library_scan' | 'plex_recently_added_check' | 'audible_refresh' | 'retry_missing_torrents' | 'retry_failed_imports' | 'find_missing_ebooks' | 'cleanup_seeded_torrents' | 'monitor_rss_feeds' | 'sync_reading_shelves' | 'check_watched_lists';
+export type ScheduledJobType = 'plex_library_scan' | 'plex_recently_added_check' | 'audible_refresh' | 'retry_missing_torrents' | 'retry_failed_imports' | 'find_missing_ebooks' | 'bookorbit_library_scan' | 'cleanup_seeded_torrents' | 'monitor_rss_feeds' | 'sync_reading_shelves' | 'check_watched_lists';
 
 export interface ScheduledJob {
   id: string;
@@ -135,6 +135,13 @@ export class SchedulerService {
         type: 'find_missing_ebooks' as ScheduledJobType,
         schedule: '0 0 * * *', // Daily at midnight
         enabled: true, // Enable by default; gated by ebook_auto_grab_enabled + source-enablement at run time
+        payload: {},
+      },
+      {
+        name: 'BookOrbit Library Scan',
+        type: 'bookorbit_library_scan' as ScheduledJobType,
+        schedule: '0 */6 * * *', // Every 6 hours
+        enabled: true,
         payload: {},
       },
       {
@@ -427,6 +434,9 @@ export class SchedulerService {
       case 'find_missing_ebooks':
         bullJobId = await this.triggerFindMissingEbooks(job);
         break;
+      case 'bookorbit_library_scan':
+        bullJobId = await this.triggerBookOrbitScan(job);
+        break;
       case 'cleanup_seeded_torrents':
         bullJobId = await this.triggerCleanupSeededTorrents(job);
         break;
@@ -698,6 +708,13 @@ export class SchedulerService {
    */
   private async triggerFindMissingEbooks(job: any): Promise<string> {
     return await this.jobQueue.addFindMissingEbooksJob(job.id);
+  }
+
+  /**
+   * Trigger BookOrbit ebook library scan
+   */
+  private async triggerBookOrbitScan(job: any): Promise<string> {
+    return await this.jobQueue.addBookOrbitScanJob(job.id);
   }
 
   /**

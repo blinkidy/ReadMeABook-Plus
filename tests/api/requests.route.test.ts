@@ -30,6 +30,7 @@ vi.mock('@/lib/services/job-queue.service', () => ({
 
 vi.mock('@/lib/utils/audiobook-matcher', () => ({
   findPlexMatch: findPlexMatchMock,
+  findBookOrbitMatch: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@/lib/integrations/audible.service', () => ({
@@ -47,6 +48,7 @@ describe('Requests API routes', () => {
       json: vi.fn(),
     };
     requireAuthMock.mockImplementation((_req: any, handler: any) => handler(authRequest));
+    prismaMock.plexLibrary.findFirst.mockResolvedValue(null);
   });
 
   it('returns 409 when an active request already exists', async () => {
@@ -74,7 +76,7 @@ describe('Requests API routes', () => {
       audiobook: { asin: 'ASIN-2', title: 'Title', author: 'Author' },
     });
     prismaMock.request.findFirst.mockResolvedValueOnce(null);
-    findPlexMatchMock.mockResolvedValueOnce({ plexGuid: 'plex-1' });
+    prismaMock.plexLibrary.findFirst.mockResolvedValueOnce({ plexGuid: 'plex-1' });
 
     const { POST } = await import('@/app/api/requests/route');
     const response = await POST({} as any);
@@ -89,7 +91,6 @@ describe('Requests API routes', () => {
       audiobook: { asin: 'ASIN-3', title: 'Title', author: 'Author' },
     });
     prismaMock.request.findFirst.mockResolvedValueOnce(null);
-    findPlexMatchMock.mockResolvedValueOnce(null);
     prismaMock.audiobook.findFirst.mockResolvedValueOnce(null);
     prismaMock.audiobook.create.mockResolvedValueOnce({
       id: 'ab-1',
@@ -149,7 +150,6 @@ describe('Requests API routes', () => {
       audiobook: { asin: 'ASIN-4', title: 'Title', author: 'Author' },
     });
     prismaMock.request.findFirst.mockResolvedValueOnce(null);
-    findPlexMatchMock.mockResolvedValueOnce(null);
     prismaMock.audiobook.findFirst.mockResolvedValueOnce(null);
     prismaMock.audiobook.create.mockResolvedValueOnce({
       id: 'ab-2',

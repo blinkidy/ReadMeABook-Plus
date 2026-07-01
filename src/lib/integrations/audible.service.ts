@@ -146,6 +146,11 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+function isTruncatedDescription(description: string | undefined): boolean {
+  if (!description) return true;
+  return /(\.\.\.|…)\s*$/.test(description.trim());
+}
+
 function mapCatalogProduct(product: CatalogProduct): AudibleAudiobook {
   const author = product.authors?.map((a) => a.name).join(', ') ?? '';
   const authorAsin = product.authors?.[0]?.asin ?? undefined;
@@ -653,6 +658,24 @@ export class AudibleService {
       const audnexusData = await this.fetchFromAudnexus(asin);
       if (audnexusData) {
         logger.info(` Successfully fetched from Audnexus for "${audnexusData.title}"`);
+
+        // Audnexus sometimes only has a short marketing teaser (already cut off
+        // with an ellipsis) rather than the full publisher summary. In that case,
+        // pull the fuller description from Audible's own catalog API without
+        // discarding the rest of Audnexus's (generally more complete) data.
+        if (isTruncatedDescription(audnexusData.description)) {
+          try {
+            const catalogData = await this.fetchAudibleDetailsFromApi(asin);
+            if (catalogData?.description && catalogData.description.length > (audnexusData.description?.length ?? 0)) {
+              audnexusData.description = catalogData.description;
+            }
+          } catch (error) {
+            logger.debug(`Catalog description backfill failed for ${asin}`, {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+
         return audnexusData;
       }
 
@@ -816,9 +839,9 @@ export class AudibleService {
   }
 
   /**
-   * Category audiobooks from Audible's HTML /search?node=<categoryId> page,
-   * sorted by popularity-rank. Uses HTML scraping (not the catalog API) so
-   * results match Audible's curated category-storefront ordering.
+   * Category audiobooks from Audible's bestseller chart for a category node.
+   * Uses the /charts/best/.../<categoryId> route instead of /adblbestsellers?node=...
+   * because the latter redirects to the global chart and loses the genre scope.
    */
   async getCategoryBooks(categoryId: string, limit: number = 200): Promise<AudibleAudiobook[]> {
     await this.initialize();
@@ -834,13 +857,11 @@ export class AudibleService {
     while (audiobooks.length < limit && page <= maxPages) {
       try {
         const { data: response, meta } = await this.fetchWithRetry(
-          '/search',
+          `/charts/best/category-audiobooks/${categoryId}`,
           {
             params: {
               ipRedirectOverride: 'true',
-              node: categoryId,
               pageSize: AUDIBLE_PAGE_SIZE,
-              sort: 'popularity-rank',
               ...(page > 1 ? { page } : {}),
             },
           },
@@ -849,7 +870,7 @@ export class AudibleService {
           HTML_MAX_BACKOFF_MS,
         );
 
-        const foundOnPage = this.parseSearchResultItems(
+        const foundOnPage = this.parseProductListItems(
           response.data,
           audiobooks,
           limit,
@@ -953,10 +974,8 @@ export class AudibleService {
   }
 
   /**
-   * Parse the `.s-result-item` / `.productListItem` blocks used by
-   * /search?node=<categoryId>. Pushes matched books into `audiobooks`
-   * (skipping duplicates and respecting `limit`) and returns the count parsed
-   * from this page.
+   * Parse generic Audible search-result blocks. Kept for search-style HTML
+   * layouts; category bestseller charts use parseProductListItems().
    */
   private parseSearchResultItems(
     html: string,

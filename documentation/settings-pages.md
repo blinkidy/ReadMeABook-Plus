@@ -77,18 +77,23 @@ src/app/admin/settings/
 
 **Purpose:** Configure ebook download sources and preferences to accompany audiobook downloads.
 
-**Tab Structure (3 sections):**
+**Tab Structure (4 sections):**
 
 1. **Anna's Archive Section**
    - Enable toggle for Anna's Archive downloads
    - Base URL (default: `https://annas-archive.gl`)
-   - FlareSolverr URL (optional, for Cloudflare bypass)
+   - FlareSolverr URL (optional, for Cloudflare bypass), with a "Test" button
 
-2. **Indexer Search Section**
+2. **Book Search (Hardcover) Section**
+   - One admin-level Hardcover API key (`hardcover_search_api_key`, encrypted), shared across all users — separate from any personal Hardcover token used for shelf-sync
+   - "Test" button (`POST /api/admin/settings/ebook/test-hardcover`) validates the key via a live Hardcover search before saving
+   - When set, book search always queries Hardcover in parallel with Audible, surfacing books with no audiobook edition. See [Hardcover book search fallback](integrations/hardcover-search.md).
+
+3. **Indexer Search Section**
    - Enable toggle for indexer-based ebook search via Prowlarr
    - Hint directing users to Indexers tab for category configuration
 
-3. **General Settings Section** (visible when any source enabled)
+4. **General Settings Section** (visible when any source enabled)
    - Preferred format: EPUB (recommended), PDF, MOBI, AZW3, Any
    - Auto-grab toggle: Automatically create ebook requests after audiobook downloads
    - Kindle fix toggle: Apply compatibility fixes to EPUB files (only visible when EPUB format selected)
@@ -103,6 +108,7 @@ src/app/admin/settings/
 | `ebook_kindle_fix_enabled` | `false` | Apply Kindle compatibility fixes to EPUB files |
 | `ebook_sidecar_base_url` | `https://annas-archive.gl` | Anna's Archive mirror |
 | `ebook_sidecar_flaresolverr_url` | `` | FlareSolverr URL |
+| `hardcover_search_api_key` | `` | Admin-level Hardcover API key (encrypted), powers book search for all users |
 
 **Behavior:**
 - If Anna's Archive enabled → Searches Anna's Archive first

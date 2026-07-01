@@ -28,6 +28,7 @@ import { useReplaceWithTorrent } from '@/lib/hooks/useReportedIssues';
 import { Audiobook } from '@/lib/hooks/useAudiobooks';
 import { fetchWithAuth } from '@/lib/utils/api';
 import { normalizeReleaseKey } from '@/lib/utils/release-key';
+import { cleanIndexerSearchTitle } from '@/lib/utils/search-title';
 
 interface BlockedReleaseLookup {
   /** normalized release key → reason text */
@@ -140,7 +141,11 @@ export function InteractiveTorrentSearchModal({
   // badges are rendered. We only attempt the fetch when we have a requestId
   // (the ASIN-based ebook flow has no per-request blocklist context).
   const canFetchBlocklist = !!requestId && isOpen;
-  const [searchTitle, setSearchTitle] = useState(customSearchTerms || audiobook.title);
+  const getInitialSearchTitle = useCallback(
+    () => cleanIndexerSearchTitle(customSearchTerms || audiobook.title),
+    [audiobook.title, customSearchTerms]
+  );
+  const [searchTitle, setSearchTitle] = useState(getInitialSearchTitle);
   const [isCustomConfirming, setIsCustomConfirming] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [expandedGuids, setExpandedGuids] = useState<Set<string>>(() => new Set());
@@ -180,10 +185,10 @@ export function InteractiveTorrentSearchModal({
 
   // Reset search title when modal opens/closes or audiobook changes
   useEffect(() => {
-    setSearchTitle(customSearchTerms || audiobook.title);
+    setSearchTitle(getInitialSearchTitle());
     setResults([]);
     setExpandedGuids(new Set());
-  }, [isOpen, audiobook.title, customSearchTerms]);
+  }, [isOpen, getInitialSearchTitle]);
 
   // Reset blocklist lookup when modal closes; fetch when admin opens it.
   useEffect(() => {

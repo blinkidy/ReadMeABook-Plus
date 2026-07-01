@@ -10,7 +10,7 @@
 import { prisma } from '@/lib/db';
 import { getJobQueueService } from '@/lib/services/job-queue.service';
 import { getConfigService } from '@/lib/services/config.service';
-import { findPlexMatch } from '@/lib/utils/audiobook-matcher';
+import { findBookOrbitMatch } from '@/lib/utils/audiobook-matcher';
 import { getAudibleService } from '@/lib/integrations/audible.service';
 import { RMABLogger } from '@/lib/utils/logger';
 import { shouldSkipAutoSearch } from '@/lib/utils/release-date';
@@ -19,7 +19,8 @@ import { seedAsin, getSiblingAsins } from '@/lib/services/works.service';
 const logger = RMABLogger.create('RequestCreator');
 
 export interface CreateRequestInput {
-  asin: string;
+  /** Omitted for books sourced outside Audible (e.g. Hardcover search) that have no audiobook edition. */
+  asin?: string;
   title: string;
   author: string;
   narrator?: string;
@@ -50,12 +51,17 @@ export async function createRequestForUser(
 ): Promise<CreateRequestResult> {
   const { skipAutoSearch = false, bypassIgnore = false, mediaType = 'audiobook' } = options;
   const requestType = mediaType === 'epub' ? 'ebook' : 'audiobook';
+  const asin = audiobook.asin?.trim() || null;
 
   if (requestType === 'audiobook') {
+    if (!asin) {
+      return { success: false, reason: 'duplicate', message: 'Audiobook requests require an ASIN' };
+    }
+
     // Check for existing active request (downloaded/available) for this ASIN
     const existingActiveRequest = await prisma.request.findFirst({
       where: {
-        audiobook: { audibleAsin: audiobook.asin },
+        audiobook: { audibleAsin: asin },
         type: 'audiobook',
         status: { in: ['downloaded', 'available'] },
         deletedAt: null,
@@ -73,15 +79,21 @@ export async function createRequestForUser(
       };
     }
 
-    // Check if audiobook is already in Plex/ABS library
-    const plexMatch = await findPlexMatch({
-      asin: audiobook.asin,
-      title: audiobook.title,
-      author: audiobook.author,
-      narrator: audiobook.narrator,
+    // Check if audiobook is already in the audio library. BookOrbit ebook
+    // matches are intentionally excluded so ebook-only ownership can still
+    // request the audiobook.
+    const audioLibraryMatch = await prisma.plexLibrary.findFirst({
+      where: {
+        plexLibraryId: { not: 'bookorbit' },
+        OR: [
+          { asin },
+          { plexGuid: { contains: asin } },
+        ],
+      },
+      select: { plexGuid: true },
     });
 
-    if (plexMatch) {
+    if (audioLibraryMatch) {
       return {
         success: false,
         reason: 'already_available',
@@ -91,7 +103,7 @@ export async function createRequestForUser(
 
     // Check per-user ignore list (skipped for manual requests via bypassIgnore)
     if (!bypassIgnore) {
-      const isIgnored = await checkIgnoreList(userId, audiobook.asin);
+      const isIgnored = await checkIgnoreList(userId, asin);
       if (isIgnored) {
         return {
           success: false,
@@ -100,48 +112,97 @@ export async function createRequestForUser(
         };
       }
     }
+  } else {
+    // Books with no ASIN (e.g. Hardcover-sourced, no audiobook edition) are
+    // matched by title+author instead, since there's no audibleAsin to key on.
+    const existingFulfilledEbook = await prisma.request.findFirst({
+      where: {
+        type: 'ebook',
+        status: { in: ['available', 'downloaded'] },
+        deletedAt: null,
+        audiobook: asin
+          ? { audibleAsin: asin }
+          : {
+              audibleAsin: null,
+              title: { equals: audiobook.title, mode: 'insensitive' },
+              author: { equals: audiobook.author, mode: 'insensitive' },
+            },
+      },
+    });
+
+    if (existingFulfilledEbook) {
+      return {
+        success: false,
+        reason: 'already_available',
+        message: 'This EPUB is already available in your BookOrbit library',
+      };
+    }
+
+    const bookOrbitMatch = await findBookOrbitMatch({
+      asin: asin || '',
+      title: audiobook.title,
+      author: audiobook.author,
+      narrator: audiobook.narrator,
+    });
+
+    if (bookOrbitMatch) {
+      return {
+        success: false,
+        reason: 'already_available',
+        message: 'This EPUB is already available in your BookOrbit library',
+      };
+    }
   }
 
-  // Fetch full details from Audnexus for year/series/releaseDate
+  // Fetch full details from Audnexus for year/series/releaseDate (Audible-sourced books only)
   let year: number | undefined;
   let series: string | undefined;
   let seriesPart: string | undefined;
   let seriesAsin: string | undefined;
   let releaseDate: Date | null = null;
-  try {
-    const audibleService = getAudibleService();
-    const audnexusData = await audibleService.getAudiobookDetails(audiobook.asin);
+  if (asin) {
+    try {
+      const audibleService = getAudibleService();
+      const audnexusData = await audibleService.getAudiobookDetails(asin);
 
-    if (audnexusData?.releaseDate) {
-      try {
-        const parsed = new Date(audnexusData.releaseDate);
-        if (!isNaN(parsed.getTime())) {
-          releaseDate = parsed;
-          const releaseYear = parsed.getFullYear();
-          if (!isNaN(releaseYear)) {
-            year = releaseYear;
+      if (audnexusData?.releaseDate) {
+        try {
+          const parsed = new Date(audnexusData.releaseDate);
+          if (!isNaN(parsed.getTime())) {
+            releaseDate = parsed;
+            const releaseYear = parsed.getFullYear();
+            if (!isNaN(releaseYear)) {
+              year = releaseYear;
+            }
           }
+        } catch {
+          // Ignore parse errors
         }
-      } catch {
-        // Ignore parse errors
       }
+      if (audnexusData?.series) series = audnexusData.series;
+      if (audnexusData?.seriesPart) seriesPart = audnexusData.seriesPart;
+      if (audnexusData?.seriesAsin) seriesAsin = audnexusData.seriesAsin;
+    } catch (error) {
+      logger.warn(`Failed to fetch Audnexus data for ASIN ${asin}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    if (audnexusData?.series) series = audnexusData.series;
-    if (audnexusData?.seriesPart) seriesPart = audnexusData.seriesPart;
-    if (audnexusData?.seriesAsin) seriesAsin = audnexusData.seriesAsin;
-  } catch (error) {
-    logger.warn(`Failed to fetch Audnexus data for ASIN ${audiobook.asin}: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 
-  // Find or create audiobook record
-  let audiobookRecord = await prisma.audiobook.findFirst({
-    where: { audibleAsin: audiobook.asin },
-  });
+  // Find or create audiobook record. Books with no ASIN are matched by
+  // exact title+author instead, since there's nothing else to key on.
+  let audiobookRecord = asin
+    ? await prisma.audiobook.findFirst({ where: { audibleAsin: asin } })
+    : await prisma.audiobook.findFirst({
+        where: {
+          audibleAsin: null,
+          title: { equals: audiobook.title, mode: 'insensitive' },
+          author: { equals: audiobook.author, mode: 'insensitive' },
+        },
+      });
 
   if (!audiobookRecord) {
     audiobookRecord = await prisma.audiobook.create({
       data: {
-        audibleAsin: audiobook.asin,
+        audibleAsin: asin,
         title: audiobook.title,
         author: audiobook.author,
         narrator: audiobook.narrator,
@@ -154,7 +215,7 @@ export async function createRequestForUser(
         status: 'requested',
       },
     });
-    logger.debug(`Created audiobook ${audiobookRecord.id} for ASIN ${audiobook.asin}`);
+    logger.debug(`Created audiobook ${audiobookRecord.id} for ${asin ? `ASIN ${asin}` : 'title/author (no ASIN)'}`);
   } else {
     // Update existing record with clean metadata (e.g. Audnexus title replacing Goodreads title)
     const updates: Record<string, any> = {};
@@ -174,14 +235,17 @@ export async function createRequestForUser(
     }
   }
 
-  // Seed works table for cross-ASIN matching (Layer 2: request-time seeding)
-  seedAsin(
-    audiobook.asin,
-    audiobookRecord.title,
-    audiobookRecord.author,
-    audiobookRecord.narrator || undefined,
-    undefined // duration not available at request time
-  ).catch(() => {});
+  // Seed works table for cross-ASIN matching (Layer 2: request-time seeding).
+  // Skipped for books with no ASIN — nothing to seed against.
+  if (asin) {
+    seedAsin(
+      asin,
+      audiobookRecord.title,
+      audiobookRecord.author,
+      audiobookRecord.narrator || undefined,
+      undefined // duration not available at request time
+    ).catch(() => {});
+  }
 
   // Check if user already has an active request for this audiobook
   const existingRequest = await prisma.request.findFirst({

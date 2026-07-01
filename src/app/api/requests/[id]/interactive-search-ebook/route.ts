@@ -21,6 +21,7 @@ import {
   searchByTitle,
   getSlowDownloadLinks,
 } from '@/lib/services/ebook-scraper';
+import { cleanIndexerSearchTitle } from '@/lib/utils/search-title';
 
 const logger = RMABLogger.create('API.InteractiveSearchEbook');
 
@@ -151,7 +152,7 @@ export async function POST(
         }
 
         const audiobook = requestRecord.audiobook;
-        const searchTitle = customTitle || audiobook.title;
+        const searchTitle = cleanIndexerSearchTitle(customTitle || audiobook.title);
 
         logger.info(`Interactive ebook search for "${searchTitle}" by ${audiobook.author} (${isDirectEbookSearch ? 'direct' : 'sidecar'})`);
         logger.info(`Sources: Anna's Archive=${isAnnasArchiveEnabled}, Indexer=${isIndexerSearchEnabled}`);

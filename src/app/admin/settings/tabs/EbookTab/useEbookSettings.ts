@@ -21,6 +21,8 @@ export function useEbookSettings({ ebook, onChange, onSuccess, onError, markAsSa
   const [saving, setSaving] = useState(false);
   const [testingFlaresolverr, setTestingFlaresolverr] = useState(false);
   const [flaresolverrTestResult, setFlaresolverrTestResult] = useState<TestResult | null>(null);
+  const [testingHardcover, setTestingHardcover] = useState(false);
+  const [hardcoverTestResult, setHardcoverTestResult] = useState<TestResult | null>(null);
 
   /**
    * Update a single ebook field
@@ -29,6 +31,9 @@ export function useEbookSettings({ ebook, onChange, onSuccess, onError, markAsSa
     onChange({ ...ebook, [field]: value });
     if (field === 'flaresolverrUrl') {
       setFlaresolverrTestResult(null);
+    }
+    if (field === 'hardcoverSearchApiKey') {
+      setHardcoverTestResult(null);
     }
   };
 
@@ -70,6 +75,40 @@ export function useEbookSettings({ ebook, onChange, onSuccess, onError, markAsSa
   };
 
   /**
+   * Test the Hardcover API key
+   */
+  const testHardcoverConnection = async () => {
+    if (!ebook.hardcoverSearchApiKey) {
+      setHardcoverTestResult({
+        success: false,
+        message: 'Please enter a Hardcover API key first',
+      });
+      return;
+    }
+
+    setTestingHardcover(true);
+    setHardcoverTestResult(null);
+
+    try {
+      const response = await fetchWithAuth('/api/admin/settings/ebook/test-hardcover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: ebook.hardcoverSearchApiKey }),
+      });
+
+      const result = await response.json();
+      setHardcoverTestResult(result);
+    } catch (error) {
+      setHardcoverTestResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Test failed',
+      });
+    } finally {
+      setTestingHardcover(false);
+    }
+  };
+
+  /**
    * Save e-book settings to API
    */
   const saveSettings = async () => {
@@ -87,6 +126,7 @@ export function useEbookSettings({ ebook, onChange, onSuccess, onError, markAsSa
           flaresolverrUrl: ebook.flaresolverrUrl || '',
           autoGrabEnabled: ebook.autoGrabEnabled ?? true,
           kindleFixEnabled: ebook.kindleFixEnabled ?? false,
+          hardcoverSearchApiKey: ebook.hardcoverSearchApiKey || '',
         }),
       });
 
@@ -113,8 +153,11 @@ export function useEbookSettings({ ebook, onChange, onSuccess, onError, markAsSa
     saving,
     testingFlaresolverr,
     flaresolverrTestResult,
+    testingHardcover,
+    hardcoverTestResult,
     updateEbook,
     testFlaresolverrConnection,
+    testHardcoverConnection,
     saveSettings,
     isAnySourceEnabled,
   };

@@ -44,6 +44,11 @@ Accepts provider-agnostic book list + context, performs:
 5. **Cover enrichment** — Queries `audibleCache` for cached covers, builds `/api/cache/thumbnails/` URLs
 6. **Shelf metadata update** — Writes `lastSyncAt`, `bookCount`, top 8 books as JSON to `coverUrls`
 
+### Media Intent
+- Default auto-request media type: audiobook
+- Exact shelf/list name `Want To Own Books`: creates EPUB requests
+- Exact shelf/list name `Want To Own Audiobooks`: keeps audiobook requests
+
 ### Constants
 - `DEFAULT_MAX_LOOKUPS_PER_SHELF` = 10 (per scheduled cycle; 0 = unlimited for manual triggers)
 - `NO_MATCH_RETRY_DAYS` = 7

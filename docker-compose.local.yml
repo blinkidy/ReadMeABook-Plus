@@ -18,6 +18,7 @@ services:
       - ./downloads:/downloads
       - ./media:/media
       - ./bookorbit-ingest:/bookorbit/ingest
+      - ./bookorbit-library:/bookorbit/library:ro
 
       # PostgreSQL data persistence
       - ./pgdata:/var/lib/postgresql/data
@@ -46,6 +47,7 @@ services:
       PUID: 1000
       PGID: 1000
       BOOKORBIT_INGEST_PATH: "/bookorbit/ingest"
+      BOOKORBIT_LIBRARY_PATH: "/bookorbit/library"
 
       # ========================================================================
       # OPTIONAL: Secrets (auto-generated on first run if not provided)

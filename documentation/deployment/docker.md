@@ -18,6 +18,7 @@ Multi-container Docker application using Docker Compose: Next.js app, PostgreSQL
 - `./downloads:/downloads` - Torrent downloads (bind mount)
 - `./media:/media` - Plex audiobook library (bind mount)
 - `./bookorbit-ingest:/bookorbit/ingest` - BookOrbit EPUB ingest folder (bind mount)
+- `./bookorbit-library:/bookorbit/library:ro` - BookOrbit finished ebook library for availability scanning
 
 ## Dockerfile
 
@@ -41,6 +42,7 @@ environment:
   - DATABASE_URL=postgresql://readmeabook:password@postgres:5432/readmeabook
   - REDIS_URL=redis://redis:6379
   - BOOKORBIT_INGEST_PATH=/bookorbit/ingest
+  - BOOKORBIT_LIBRARY_PATH=/bookorbit/library
   - NEXTAUTH_URL=http://localhost:3000
   - NEXTAUTH_SECRET=<generated>
   - TURBOPACK=0  # Use Webpack, not Turbopack
