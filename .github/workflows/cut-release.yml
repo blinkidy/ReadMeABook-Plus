@@ -1,0 +1,138 @@
+name: Cut Release
+
+# Manual-only: nothing here runs automatically. Run this workflow from the
+# `main` branch when you're ready to publish a release — it tags, builds and
+# pushes the multi-arch Docker image, and creates the GitHub Release in one
+# step, so there's no separate "now go tag it / now go release it" dance.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 1.0.0). Leave blank to use package.json's version."
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  tests:
+    name: Run Tests
+    uses: ./.github/workflows/run-tests.yml
+
+  release:
+    name: Tag, Build, and Publish
+    needs: tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Guard against releasing from a non-main branch
+        if: github.ref_name != 'main'
+        run: |
+          echo "::error::Cut Release must be run from the 'main' branch (was run from '${{ github.ref_name }}'). Select 'main' in the 'Use workflow from' branch picker."
+          exit 1
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Determine and validate version
+        id: version
+        run: |
+          VERSION="${{ inputs.version }}"
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+
+          if [ -z "$VERSION" ]; then
+            VERSION="$PACKAGE_VERSION"
+          fi
+
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version '$VERSION' is not a valid semver (expected X.Y.Z)."
+            exit 1
+          fi
+
+          if [ "$VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "::error::Requested version ($VERSION) does not match package.json ($PACKAGE_VERSION). Bump package.json first."
+            exit 1
+          fi
+
+          TAG="v$VERSION"
+          if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists."
+            exit 1
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create and push release tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Capture build metadata
+        id: meta
+        run: |
+          GIT_COMMIT=$(git rev-parse --short=7 HEAD)
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          {
+            echo "git_commit=$GIT_COMMIT"
+            echo "build_date=$BUILD_DATE"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push unified Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./dockerfile.unified
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          labels: |
+            org.opencontainers.image.title=ReadMeABook Unified
+            org.opencontainers.image.description=All-in-one audiobook request and automation system (PostgreSQL + Redis + App)
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version }}
+            GIT_COMMIT=${{ steps.meta.outputs.git_commit }}
+            BUILD_DATE=${{ steps.meta.outputs.build_date }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          make_latest: true
+
+      - name: Summary
+        run: |
+          echo "## 🎉 Released ${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
