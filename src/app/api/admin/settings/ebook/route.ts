@@ -14,7 +14,7 @@ export async function PUT(request: NextRequest) {
     return requireAdmin(req, async () => {
       try {
         // Parse request body - new structure with separate source toggles
-        const { annasArchiveEnabled, indexerSearchEnabled, format, baseUrl, flaresolverrUrl, autoGrabEnabled, kindleFixEnabled } = await request.json();
+        const { annasArchiveEnabled, indexerSearchEnabled, format, baseUrl, flaresolverrUrl, autoGrabEnabled, kindleFixEnabled, hardcoverSearchApiKey } = await request.json();
 
         // Enforce: auto-grab must be false if no sources are enabled
         const effectiveAutoGrabEnabled = (annasArchiveEnabled || indexerSearchEnabled) ? (autoGrabEnabled ?? true) : false;
@@ -98,6 +98,21 @@ export async function PUT(request: NextRequest) {
         ];
 
         await configService.setMany(configs);
+
+        // Hardcover admin API key powers book search for all users; saved separately
+        // from configs above since it must never overwrite the stored value with a
+        // masked placeholder the settings UI sends back unchanged.
+        if (typeof hardcoverSearchApiKey === 'string' && hardcoverSearchApiKey && !hardcoverSearchApiKey.startsWith('••••')) {
+          await configService.setMany([
+            {
+              key: 'hardcover_search_api_key',
+              value: hardcoverSearchApiKey,
+              encrypted: true,
+              category: 'ebook',
+              description: 'Admin-level Hardcover API key used for book search (all users)',
+            },
+          ]);
+        }
 
         return NextResponse.json({ success: true });
       } catch (error) {

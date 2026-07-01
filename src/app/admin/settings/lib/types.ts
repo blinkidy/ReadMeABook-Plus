@@ -138,6 +138,9 @@ export interface EbookSettings {
   autoGrabEnabled: boolean;
   // Kindle compatibility
   kindleFixEnabled: boolean;
+  // Admin-level Hardcover API key, used for book search (no-audiobook-edition discovery)
+  hardcoverSearchApiKey: string;
+  hardcoverSearchEnabled: boolean;
 }
 
 /**

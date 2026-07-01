@@ -9,8 +9,10 @@ import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { AudiobookGrid } from '@/components/audiobooks/AudiobookGrid';
+import { HardcoverBookGrid } from '@/components/books/HardcoverBookGrid';
 import { LoadMoreBar } from '@/components/ui/LoadMoreBar';
 import { useSearch, Audiobook } from '@/lib/hooks/useAudiobooks';
+import { useBookSearch } from '@/lib/hooks/useBookSearch';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { SectionToolbar } from '@/components/ui/SectionToolbar';
 import { usePreferences } from '@/contexts/PreferencesContext';
@@ -43,6 +45,11 @@ function SearchPageContent() {
     () => hideAvailable ? results.filter((b: Audiobook) => !b.isAvailable && b.requestStatus !== 'completed') : results,
     [results, hideAvailable]
   );
+
+  // Automatic fallback: only search Hardcover once Audible search has finished
+  // and found nothing, so most users (who find everything on Audible) never see it.
+  const shouldFallbackToBooks = !!debouncedQuery && !isLoading && filteredResults.length === 0;
+  const bookSearch = useBookSearch(shouldFallbackToBooks ? debouncedQuery : '');
 
   const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -149,7 +156,7 @@ function SearchPageContent() {
             <AudiobookGrid
               audiobooks={filteredResults}
               isLoading={isLoading}
-              emptyMessage={`No results found for "${debouncedQuery}"`}
+              emptyMessage={`No audiobook found for "${debouncedQuery}"`}
               cardSize={cardSize}
               squareCovers={squareCovers}
             />
@@ -164,6 +171,39 @@ function SearchPageContent() {
                 onLoadMore={loadMore}
                 itemLabel="results"
               />
+            )}
+
+            {/* Automatic fallback: no audiobook edition found, try Hardcover */}
+            {shouldFallbackToBooks && (
+              <div className="space-y-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3">
+                  <div className="w-1 h-6 bg-gradient-to-b from-orange-500 to-amber-500 rounded-full" />
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">
+                    Books (no audiobook found)
+                  </h2>
+                </div>
+
+                <HardcoverBookGrid
+                  books={bookSearch.results}
+                  isLoading={bookSearch.isLoading}
+                  emptyMessage={
+                    bookSearch.error
+                      ? 'Book search is not set up yet. Ask an admin to add a Hardcover API key in E-book Sidecar settings.'
+                      : `No books found for "${debouncedQuery}"`
+                  }
+                />
+
+                {bookSearch.results.length > 0 && (
+                  <LoadMoreBar
+                    loadedCount={bookSearch.results.length}
+                    totalCount={bookSearch.totalResults}
+                    hasMore={bookSearch.hasMore}
+                    isLoading={bookSearch.isLoadingMore}
+                    onLoadMore={bookSearch.loadMore}
+                    itemLabel="results"
+                  />
+                )}
+              </div>
             )}
           </div>
         ) : (
