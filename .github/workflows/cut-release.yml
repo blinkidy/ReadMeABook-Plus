@@ -63,7 +63,6 @@ jobs:
           fi
 
           TAG="v$VERSION"
-          CURRENT_COMMIT=$(git rev-parse HEAD)
 
           # Prefer the peeled ref (^{}) since that resolves an annotated tag to the
           # commit it points at; fall back to the raw ref for lightweight tags.
@@ -72,15 +71,10 @@ jobs:
             EXISTING_COMMIT=$(git ls-remote origin "refs/tags/$TAG" | cut -f1)
           fi
 
-          if [ -n "$EXISTING_COMMIT" ] && [ "$EXISTING_COMMIT" != "$CURRENT_COMMIT" ]; then
-            echo "::error::Tag $TAG already exists and points at a different commit ($EXISTING_COMMIT, expected $CURRENT_COMMIT)."
-            exit 1
-          fi
-
           TAG_EXISTS="false"
           if [ -n "$EXISTING_COMMIT" ]; then
             TAG_EXISTS="true"
-            echo "::notice::Tag $TAG already exists and already points at this commit (likely a retry after a failed run) — reusing it."
+            echo "::notice::Tag $TAG already exists (pointing at $EXISTING_COMMIT) — treating it as authoritative and building that exact commit instead of creating a new tag. This makes retries after a failed run safe even if main has since moved on."
           fi
 
           {
@@ -88,6 +82,15 @@ jobs:
             echo "tag=$TAG"
             echo "tag_exists=$TAG_EXISTS"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Check out the release commit
+        # actions/checkout only fetches the dispatched ref's tip commit (fetch-depth: 1),
+        # so the existing tag's commit object isn't necessarily present locally yet —
+        # fetch it explicitly by tag name before switching to it.
+        if: steps.version.outputs.tag_exists == 'true'
+        run: |
+          git fetch origin "refs/tags/${{ steps.version.outputs.tag }}"
+          git checkout --detach FETCH_HEAD
 
       - name: Create and push release tag
         if: steps.version.outputs.tag_exists != 'true'
