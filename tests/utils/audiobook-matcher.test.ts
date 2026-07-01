@@ -153,6 +153,30 @@ describe('audiobook-matcher', () => {
     expect(match?.plexGuid).toBe('bookorbit://yesteryear');
   });
 
+  it('matches BookOrbit ebooks by primary title when the Audible subtitle was dropped', async () => {
+    prismaMock.plexLibrary.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          plexGuid: 'bookorbit://housemaid',
+          plexRatingKey: null,
+          title: 'The Housemaid',
+          author: 'Freida McFadden',
+          asin: null,
+          isbn: null,
+        },
+      ]);
+
+    const { findPlexMatch } = await import('@/lib/utils/audiobook-matcher');
+    const match = await findPlexMatch({
+      asin: 'B00NOASIN4',
+      title: 'The Housemaid: A Novel',
+      author: 'Freida McFadden',
+    });
+
+    expect(match?.plexGuid).toBe('bookorbit://housemaid');
+  });
+
   it('does not use loose BookOrbit title matching when multiple candidates share the title', async () => {
     prismaMock.plexLibrary.findMany
       .mockResolvedValueOnce([])

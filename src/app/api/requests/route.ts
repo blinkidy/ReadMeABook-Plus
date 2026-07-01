@@ -15,7 +15,8 @@ const logger = RMABLogger.create('API.Requests');
 
 const CreateRequestSchema = z.object({
   audiobook: z.object({
-    asin: z.string(),
+    // Optional: omitted for books with no audiobook edition (e.g. Hardcover search results)
+    asin: z.string().optional(),
     title: z.string(),
     author: z.string(),
     narrator: z.string().optional(),
@@ -26,6 +27,9 @@ const CreateRequestSchema = z.object({
     rating: z.number().nullable().optional(),
   }),
   mediaType: z.enum(['audiobook', 'epub']).optional().default('audiobook'),
+}).refine((data) => data.mediaType === 'epub' || !!data.audiobook.asin, {
+  message: 'ASIN is required for audiobook requests',
+  path: ['audiobook', 'asin'],
 });
 
 /**

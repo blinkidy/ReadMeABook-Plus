@@ -156,6 +156,9 @@ export async function GET(request: NextRequest) {
         autoGrabEnabled: configMap.get('ebook_auto_grab_enabled') !== 'false',
         // Kindle compatibility fixes: default false
         kindleFixEnabled: configMap.get('ebook_kindle_fix_enabled') === 'true',
+        // Admin-level Hardcover API key powering book search (separate from per-user shelf-sync tokens)
+        hardcoverSearchApiKey: maskValue('api_key', configMap.get('hardcover_search_api_key')),
+        hardcoverSearchEnabled: !!configMap.get('hardcover_search_api_key'),
       },
       general: {
         appName: configMap.get('app_name') || 'ReadMeABook',
