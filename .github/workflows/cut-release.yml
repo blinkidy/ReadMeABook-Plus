@@ -63,17 +63,34 @@ jobs:
           fi
 
           TAG="v$VERSION"
-          if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "::error::Tag $TAG already exists."
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+
+          # Prefer the peeled ref (^{}) since that resolves an annotated tag to the
+          # commit it points at; fall back to the raw ref for lightweight tags.
+          EXISTING_COMMIT=$(git ls-remote origin "refs/tags/$TAG^{}" | cut -f1)
+          if [ -z "$EXISTING_COMMIT" ]; then
+            EXISTING_COMMIT=$(git ls-remote origin "refs/tags/$TAG" | cut -f1)
+          fi
+
+          if [ -n "$EXISTING_COMMIT" ] && [ "$EXISTING_COMMIT" != "$CURRENT_COMMIT" ]; then
+            echo "::error::Tag $TAG already exists and points at a different commit ($EXISTING_COMMIT, expected $CURRENT_COMMIT)."
             exit 1
+          fi
+
+          TAG_EXISTS="false"
+          if [ -n "$EXISTING_COMMIT" ]; then
+            TAG_EXISTS="true"
+            echo "::notice::Tag $TAG already exists and already points at this commit (likely a retry after a failed run) — reusing it."
           fi
 
           {
             echo "version=$VERSION"
             echo "tag=$TAG"
+            echo "tag_exists=$TAG_EXISTS"
           } >> "$GITHUB_OUTPUT"
 
       - name: Create and push release tag
+        if: steps.version.outputs.tag_exists != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -85,9 +102,13 @@ jobs:
         run: |
           GIT_COMMIT=$(git rev-parse --short=7 HEAD)
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          # Docker repository names must be lowercase; github.repository preserves
+          # the repo's actual casing (e.g. "blinkidy/ReadMeABook-Plus").
+          IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
           {
             echo "git_commit=$GIT_COMMIT"
             echo "build_date=$BUILD_DATE"
+            echo "image_name=$IMAGE_NAME_LOWER"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
@@ -108,9 +129,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ steps.meta.outputs.image_name }}:${{ steps.version.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ steps.meta.outputs.image_name }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ steps.meta.outputs.image_name }}:latest
           labels: |
             org.opencontainers.image.title=ReadMeABook Unified
             org.opencontainers.image.description=All-in-one audiobook request and automation system (PostgreSQL + Redis + App)
@@ -134,5 +155,5 @@ jobs:
           echo "## 🎉 Released ${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ steps.meta.outputs.image_name }}:latest" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
