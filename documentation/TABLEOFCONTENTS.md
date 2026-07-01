@@ -18,6 +18,7 @@
 - **Audiobook organization templates** → [settings-pages.md](settings-pages.md#audiobook-organization-template), [phase3/file-organization.md](phase3/file-organization.md#target-structure)
 - **Setup middleware & status check** → [backend/middleware.md](backend/middleware.md)
 - **Environment variables, PUBLIC_URL, OAuth configuration** → [backend/services/environment.md](backend/services/environment.md)
+- **Version badge, release-link/update-check, CI version injection** → [backend/services/version.md](backend/services/version.md)
 
 ## Database & Data Models
 - **PostgreSQL schema, tables, relationships** → [backend/database.md](backend/database.md)
@@ -48,6 +49,7 @@
 - **Book covers API for login page** → [frontend/pages/login.md](frontend/pages/login.md)
 - **Dedup & works table (cross-ASIN identity)** → [integrations/audible.md](integrations/audible.md#dedup--works-table)
 - **Multi-narrator capture in HTML scrapers** → [integrations/audible.md](integrations/audible.md#narrator-capture-in-html-scrapers)
+- **Truncated Audnexus descriptions backfilled from catalog API** → [integrations/audible.md](integrations/audible.md#fixed-issues)
 
 ## E-book Support (First-Class)
 - **First-class ebook requests, separate tracking** → [integrations/ebook-sidecar.md](integrations/ebook-sidecar.md)
@@ -57,8 +59,11 @@
 - **Ebook ranking algorithm (unified with audiobooks)** → [phase3/ranking-algorithm.md](phase3/ranking-algorithm.md#ebook-torrent-ranking)
 - **Direct HTTP downloads from Anna's Archive** → [integrations/ebook-sidecar.md](integrations/ebook-sidecar.md)
 - **Ebook delete behavior (files only, torrents seed)** → [integrations/ebook-sidecar.md](integrations/ebook-sidecar.md#delete-behavior)
-- **Ebook settings (3-section UI)** → [settings-pages.md](settings-pages.md#e-book-sidecar)
+- **Ebook settings (4-section UI)** → [settings-pages.md](settings-pages.md#e-book-sidecar)
 - **Indexer categories (audiobook/ebook tabs)** → [settings-pages.md](settings-pages.md#indexer-categories-tabbed)
+- **Hardcover book search fallback (admin key, no-audiobook-edition books)** → [integrations/hardcover-search.md](integrations/hardcover-search.md)
+- **Hide-owned toggles split by format, corner format badges** → [frontend/components.md](frontend/components.md)
+- **Audiobook summary Read more/Show less toggle** → [frontend/components.md](frontend/components.md)
 
 ## Automation Pipeline
 - **Full pipeline overview** → [phase3/README.md](phase3/README.md)
