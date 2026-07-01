@@ -311,6 +311,12 @@ interface AuthorBooksResult {
 - **Fix:** Added `language=<audibleLocaleParam>` default param on `htmlClient` (axios default params). Still in effect for the remaining HTML path (`audible-series.ts`). **Not applied to `apiClient`** — the catalog JSON API is region-bound via `apiBaseUrl` and does not require the language param.
 - **Location:** `src/lib/integrations/audible.service.ts` — `initialize()` (htmlClient params)
 
+**Audiobook summary visibly cut off with "..." even when expanded (2026-07-01)**
+- **Problem:** The audiobook details modal's "Read more" toggle correctly expanded the summary, but some books still ended mid-sentence with a literal `...`.
+- **Root cause:** `getAudiobookDetails()` tries Audnexus first and only fell back to Audible's catalog API (`fetchAudibleDetailsFromApi` → `publisher_summary`) when Audnexus outright failed (404/error) — never based on whether the description it returned was any good. For some books, Audnexus's `description` is empty or is itself a short marketing teaser that already ends in an ellipsis, so the fuller catalog summary was never fetched.
+- **Fix:** Added `isTruncatedDescription()` — when Audnexus's description is missing or ends in `...`/`…`, also call `fetchAudibleDetailsFromApi()` and swap in its `publisher_summary` if it's longer, while keeping the rest of Audnexus's (generally more complete) data.
+- **Location:** `src/lib/integrations/audible.service.ts` (`getAudiobookDetails`, `isTruncatedDescription`)
+
 ## Related
 
 - [Audiobookshelf Integration](./audiobookshelf.md)
