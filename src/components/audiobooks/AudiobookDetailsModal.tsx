@@ -8,7 +8,7 @@
 
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
@@ -23,6 +23,7 @@ import { FolderArrowDownIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { EyeSlashIcon as EyeSlashSolidIcon } from '@heroicons/react/24/solid';
 import { fetchWithAuth } from '@/lib/utils/api';
 import { useIsIgnored, useToggleIgnore } from '@/lib/hooks/useIgnoredAudiobooks';
+import { useIsClamped } from '@/lib/hooks/useIsClamped';
 
 interface AudiobookDetailsModalProps {
   asin: string;
@@ -111,6 +112,13 @@ export function AudiobookDetailsModal({
   const [isTogglingIgnore, setIsTogglingIgnore] = useState(false);
   const [requestFormat, setRequestFormat] = useState<RequestFormat>('audiobook');
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const descriptionRef = useRef<HTMLParagraphElement>(null);
+  // Real overflow detection instead of a character-count guess, since the same
+  // text wraps into more lines on narrower (mobile) viewports.
+  // `mounted` must be a dependency: this modal renders once before `mounted`
+  // flips true (see below), so the paragraph doesn't exist yet on the first
+  // pass — without this, the effect never re-measures once it actually mounts.
+  const isDescriptionClamped = useIsClamped(descriptionRef, [audiobook?.description, descriptionExpanded, mounted]);
 
   // Sync local status when the prop changes (e.g. page data refreshes)
   useEffect(() => {
@@ -554,13 +562,14 @@ export function AudiobookDetailsModal({
                     Summary
                   </h3>
                   <p
+                    ref={descriptionRef}
                     className={`text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap text-[15px] ${
-                      !descriptionExpanded && audiobook.description.length > 300 ? 'line-clamp-4' : ''
+                      !descriptionExpanded ? 'line-clamp-4' : ''
                     }`}
                   >
                     {audiobook.description}
                   </p>
-                  {audiobook.description.length > 300 && (
+                  {(isDescriptionClamped || descriptionExpanded) && (
                     <button
                       onClick={() => setDescriptionExpanded(!descriptionExpanded)}
                       className="mt-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"

@@ -476,19 +476,31 @@ describe('AudiobookDetailsModal', () => {
   });
 
   it('expands and collapses a long summary via Read more/Show less', async () => {
-    useAudiobookDetailsMock.mockReturnValue({
-      audiobook: { ...audiobookDetails, description: 'A'.repeat(400) },
-      isLoading: false,
-      error: null,
-    });
-    const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
+    // jsdom doesn't do real layout, so scrollHeight/clientHeight are 0 by
+    // default. Stub them to simulate a clamped paragraph that overflows.
+    const scrollHeightDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollHeight');
+    const clientHeightDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'clientHeight');
+    Object.defineProperty(Element.prototype, 'scrollHeight', { configurable: true, value: 200 });
+    Object.defineProperty(Element.prototype, 'clientHeight', { configurable: true, value: 80 });
 
-    render(<AudiobookDetailsModal asin="ASIN123" isOpen={true} onClose={vi.fn()} />);
+    try {
+      useAudiobookDetailsMock.mockReturnValue({
+        audiobook: { ...audiobookDetails, description: 'A'.repeat(400) },
+        isLoading: false,
+        error: null,
+      });
+      const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
 
-    await act(async () => {});
-    const readMore = screen.getByRole('button', { name: 'Read more' });
-    fireEvent.click(readMore);
+      render(<AudiobookDetailsModal asin="ASIN123" isOpen={true} onClose={vi.fn()} />);
 
-    expect(screen.getByRole('button', { name: 'Show less' })).toBeInTheDocument();
+      await act(async () => {});
+      const readMore = screen.getByRole('button', { name: 'Read more' });
+      fireEvent.click(readMore);
+
+      expect(screen.getByRole('button', { name: 'Show less' })).toBeInTheDocument();
+    } finally {
+      if (scrollHeightDescriptor) Object.defineProperty(Element.prototype, 'scrollHeight', scrollHeightDescriptor);
+      if (clientHeightDescriptor) Object.defineProperty(Element.prototype, 'clientHeight', clientHeightDescriptor);
+    }
   });
 });
