@@ -110,11 +110,17 @@ export function AudiobookDetailsModal({
   const [coverError, setCoverError] = useState(false);
   const [isTogglingIgnore, setIsTogglingIgnore] = useState(false);
   const [requestFormat, setRequestFormat] = useState<RequestFormat>('audiobook');
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
   // Sync local status when the prop changes (e.g. page data refreshes)
   useEffect(() => {
     setLocalRequestStatus(requestStatus ?? null);
   }, [requestStatus]);
+
+  // Collapse the summary again when a different book's details are opened
+  useEffect(() => {
+    setDescriptionExpanded(false);
+  }, [asin]);
 
   const effectiveStatus = localRequestStatus;
   const ebookAvailable = ebookStatus?.ebookAvailable ?? false;
@@ -547,9 +553,21 @@ export function AudiobookDetailsModal({
                   <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
                     Summary
                   </h3>
-                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap text-[15px]">
+                  <p
+                    className={`text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap text-[15px] ${
+                      !descriptionExpanded && audiobook.description.length > 300 ? 'line-clamp-4' : ''
+                    }`}
+                  >
                     {audiobook.description}
                   </p>
+                  {audiobook.description.length > 300 && (
+                    <button
+                      onClick={() => setDescriptionExpanded(!descriptionExpanded)}
+                      className="mt-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                    >
+                      {descriptionExpanded ? 'Show less' : 'Read more'}
+                    </button>
+                  )}
                 </div>
               )}
 

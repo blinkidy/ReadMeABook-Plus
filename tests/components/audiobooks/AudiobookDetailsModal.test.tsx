@@ -465,4 +465,30 @@ describe('AudiobookDetailsModal', () => {
     expect(screen.getAllByTitle('Interactive Search').length).toBeGreaterThan(0);
     expect(screen.getByTitle('Manual Import')).toBeInTheDocument();
   });
+
+  it('does not show a Read more toggle for a short summary', async () => {
+    const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
+
+    render(<AudiobookDetailsModal asin="ASIN123" isOpen={true} onClose={vi.fn()} />);
+
+    await act(async () => {});
+    expect(screen.queryByRole('button', { name: 'Read more' })).not.toBeInTheDocument();
+  });
+
+  it('expands and collapses a long summary via Read more/Show less', async () => {
+    useAudiobookDetailsMock.mockReturnValue({
+      audiobook: { ...audiobookDetails, description: 'A'.repeat(400) },
+      isLoading: false,
+      error: null,
+    });
+    const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
+
+    render(<AudiobookDetailsModal asin="ASIN123" isOpen={true} onClose={vi.fn()} />);
+
+    await act(async () => {});
+    const readMore = screen.getByRole('button', { name: 'Read more' });
+    fireEvent.click(readMore);
+
+    expect(screen.getByRole('button', { name: 'Show less' })).toBeInTheDocument();
+  });
 });
