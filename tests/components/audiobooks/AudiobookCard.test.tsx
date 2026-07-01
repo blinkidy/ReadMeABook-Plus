@@ -140,4 +140,40 @@ describe('AudiobookCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View details for Test Book by Author' }));
     expect(screen.getByTestId('details-modal')).toHaveAttribute('data-open', 'true');
   });
+
+  it('shows only the audiobook badge when only the audiobook is owned', async () => {
+    const { AudiobookCard } = await import('@/components/audiobooks/AudiobookCard');
+
+    render(<AudiobookCard audiobook={{ ...baseAudiobook, audiobookAvailable: true, ebookAvailable: false }} />);
+
+    expect(screen.getByTitle('You own this as an audiobook')).toBeInTheDocument();
+    expect(screen.queryByTitle('You own this as an ebook')).not.toBeInTheDocument();
+  });
+
+  it('shows only the ebook badge when only the ebook is owned', async () => {
+    const { AudiobookCard } = await import('@/components/audiobooks/AudiobookCard');
+
+    render(<AudiobookCard audiobook={{ ...baseAudiobook, audiobookAvailable: false, ebookAvailable: true }} />);
+
+    expect(screen.queryByTitle('You own this as an audiobook')).not.toBeInTheDocument();
+    expect(screen.getByTitle('You own this as an ebook')).toBeInTheDocument();
+  });
+
+  it('shows both badges when both formats are owned', async () => {
+    const { AudiobookCard } = await import('@/components/audiobooks/AudiobookCard');
+
+    render(<AudiobookCard audiobook={{ ...baseAudiobook, audiobookAvailable: true, ebookAvailable: true }} />);
+
+    expect(screen.getByTitle('You own this as an audiobook')).toBeInTheDocument();
+    expect(screen.getByTitle('You own this as an ebook')).toBeInTheDocument();
+  });
+
+  it('shows no format badges when neither format is owned', async () => {
+    const { AudiobookCard } = await import('@/components/audiobooks/AudiobookCard');
+
+    render(<AudiobookCard audiobook={{ ...baseAudiobook, audiobookAvailable: false, ebookAvailable: false }} />);
+
+    expect(screen.queryByTitle('You own this as an audiobook')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('You own this as an ebook')).not.toBeInTheDocument();
+  });
 });

@@ -43,7 +43,11 @@ function measureHeaderHeight(): number {
 
 export default function HomePage() {
   const { sections, nextRefresh, isLoading: sectionsLoading, saveSections } = useHomeSections();
-  const { cardSize, setCardSize, squareCovers, setSquareCovers, hideAvailable, setHideAvailable } = usePreferences();
+  const {
+    cardSize, setCardSize, squareCovers, setSquareCovers,
+    hideAudiobookAvailable, setHideAudiobookAvailable,
+    hideEbookAvailable, setHideEbookAvailable,
+  } = usePreferences();
 
   // Per-section pagination state
   const [pages, setPages] = useState<Record<string, number>>({});
@@ -72,11 +76,11 @@ export default function HomePage() {
     }
   });
 
-  // Reset pages and totalPages when hideAvailable changes
+  // Reset pages and totalPages when either hide toggle changes
   useEffect(() => {
     setPages({});
     setTotalPagesMap({});
-  }, [hideAvailable]);
+  }, [hideAudiobookAvailable, hideEbookAvailable]);
 
   // Clamp activeIndex if the section list shrinks
   useEffect(() => {
@@ -244,8 +248,10 @@ export default function HomePage() {
                   sectionRef={ref}
                   cardSize={cardSize}
                   squareCovers={squareCovers}
-                  hideAvailable={hideAvailable}
-                  onToggleHideAvailable={setHideAvailable}
+                  hideAudiobookAvailable={hideAudiobookAvailable}
+                  hideEbookAvailable={hideEbookAvailable}
+                  onToggleHideAudiobookAvailable={setHideAudiobookAvailable}
+                  onToggleHideEbookAvailable={setHideEbookAvailable}
                   onToggleSquareCovers={setSquareCovers}
                   onCardSizeChange={setCardSize}
                   onConfigOpen={index === 0 ? () => setConfigOpen(true) : undefined}

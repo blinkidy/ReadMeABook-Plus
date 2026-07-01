@@ -16,7 +16,7 @@ import { annotateWithIgnoreStatus } from '@/lib/utils/ignored-audiobooks';
 const logger = RMABLogger.create('API.Audiobooks.Category');
 
 /**
- * GET /api/audiobooks/category/[categoryId]?page=1&limit=20&hideAvailable=false
+ * GET /api/audiobooks/category/[categoryId]?page=1&limit=20&hideAudiobookAvailable=false&hideEbookAvailable=false
  */
 export async function GET(
   request: NextRequest,
@@ -27,7 +27,8 @@ export async function GET(
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
-    const hideAvailable = searchParams.get('hideAvailable') === 'true';
+    const hideAudiobookAvailable = searchParams.get('hideAudiobookAvailable') === 'true';
+    const hideEbookAvailable = searchParams.get('hideEbookAvailable') === 'true';
 
     if (page < 1 || limit < 1 || limit > 100) {
       return NextResponse.json(
@@ -38,11 +39,17 @@ export async function GET(
 
     const skip = (page - 1) * limit;
 
-    // Get excluded ASINs when hideAvailable
+    // Get excluded ASINs for whichever formats are toggled to hide
     let excludedAsins: string[] = [];
-    if (hideAvailable) {
-      const availableSet = await getAvailableAsins();
-      excludedAsins = [...availableSet];
+    if (hideAudiobookAvailable || hideEbookAvailable) {
+      const excludedSet = new Set<string>();
+      if (hideAudiobookAvailable) {
+        for (const asin of await getAvailableAsins('audiobook')) excludedSet.add(asin);
+      }
+      if (hideEbookAvailable) {
+        for (const asin of await getAvailableAsins('ebook')) excludedSet.add(asin);
+      }
+      excludedAsins = [...excludedSet];
     }
 
     // Query AudibleCacheCategory joined with AudibleCache

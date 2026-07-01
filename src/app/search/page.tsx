@@ -22,7 +22,11 @@ function SearchPageContent() {
   const queryParam = searchParams.get('q') || '';
   const [query, setQuery] = useState(queryParam);
   const [debouncedQuery, setDebouncedQuery] = useState(queryParam);
-  const { cardSize, setCardSize, squareCovers, setSquareCovers, hideAvailable, setHideAvailable } = usePreferences();
+  const {
+    cardSize, setCardSize, squareCovers, setSquareCovers,
+    hideAudiobookAvailable, setHideAudiobookAvailable,
+    hideEbookAvailable, setHideEbookAvailable,
+  } = usePreferences();
 
   useEffect(() => {
     setQuery(queryParam);
@@ -40,10 +44,14 @@ function SearchPageContent() {
 
   const { results, totalResults, hasMore, isLoading, isLoadingMore, loadMore } = useSearch(debouncedQuery);
 
-  // Filter out available titles when hideAvailable is enabled
+  // Filter out titles already owned in a format the user wants hidden
   const filteredResults = useMemo(
-    () => hideAvailable ? results.filter((b: Audiobook) => !b.isAvailable && b.requestStatus !== 'completed') : results,
-    [results, hideAvailable]
+    () => results.filter((b: Audiobook) => {
+      if (hideAudiobookAvailable && (b.audiobookAvailable || b.requestStatus === 'completed')) return false;
+      if (hideEbookAvailable && b.ebookAvailable) return false;
+      return true;
+    }),
+    [results, hideAudiobookAvailable, hideEbookAvailable]
   );
 
   // Always search Hardcover alongside Audible. Audible's keyword search can return
@@ -142,8 +150,10 @@ function SearchPageContent() {
                     </span>
                   )}
                   <SectionToolbar
-                    hideAvailable={hideAvailable}
-                    onToggleHideAvailable={setHideAvailable}
+                    hideAudiobookAvailable={hideAudiobookAvailable}
+                    onToggleHideAudiobookAvailable={setHideAudiobookAvailable}
+                    hideEbookAvailable={hideEbookAvailable}
+                    onToggleHideEbookAvailable={setHideEbookAvailable}
                     squareCovers={squareCovers}
                     onToggleSquareCovers={setSquareCovers}
                     cardSize={cardSize}

@@ -245,16 +245,65 @@ export async function findBookOrbitMatch(
 }
 
 /**
+ * Combined match + per-format availability lookup, sharing a single
+ * plexLibrary query (mirrors findPlexMatch's own query/priority logic so
+ * `isAvailable`/`plexGuid` stay identical, without querying twice).
+ * `plexLibraryId: 'bookorbit'` rows are ebook-only; everything else
+ * (Plex/Audiobookshelf libraries) is audiobook.
+ */
+async function findMatchWithFormatAvailability(
+  audiobook: AudiobookMatchInput,
+): Promise<{ plexGuid: string | null; audiobookAvailable: boolean; ebookAvailable: boolean }> {
+  if (!audiobook.asin || audiobook.asin.trim() === '') {
+    return { plexGuid: null, audiobookAvailable: false, ebookAvailable: false };
+  }
+
+  const rows = await prisma.plexLibrary.findMany({
+    where: {
+      OR: [
+        { asin: audiobook.asin },
+        { plexGuid: { contains: audiobook.asin } },
+      ],
+    },
+    select: { plexGuid: true, asin: true, plexLibraryId: true },
+  });
+
+  if (rows.length === 0) {
+    // No direct ASIN match anywhere; the only fallback is BookOrbit's fuzzy
+    // title/author match, which is ebook-only (no fuzzy fallback for audiobooks).
+    const bookOrbitMatch = await findBookOrbitMatch(audiobook);
+    return {
+      plexGuid: bookOrbitMatch?.plexGuid || null,
+      audiobookAvailable: false,
+      ebookAvailable: !!bookOrbitMatch,
+    };
+  }
+
+  // Mirror findPlexMatch's priority for plexGuid: exact ASIN field match first,
+  // then ASIN-in-guid match.
+  const exactAsinMatch = rows.find((row) => row.asin?.toLowerCase() === audiobook.asin.toLowerCase());
+  const guidMatch = rows.find((row) => row.plexGuid?.includes(audiobook.asin));
+
+  return {
+    plexGuid: exactAsinMatch?.plexGuid || guidMatch?.plexGuid || null,
+    audiobookAvailable: rows.some((row) => row.plexLibraryId !== 'bookorbit'),
+    ebookAvailable: rows.some((row) => row.plexLibraryId === 'bookorbit'),
+  };
+}
+
+/**
  * Enrich an Audible audiobook with Plex library match information.
  * Used by API routes to add availability status to responses.
  */
 export async function enrichAudiobookWithMatch(audiobook: AudiobookMatchInput & Record<string, any>) {
-  const match = await findPlexMatch(audiobook);
+  const { plexGuid, audiobookAvailable, ebookAvailable } = await findMatchWithFormatAvailability(audiobook);
 
   return {
     ...audiobook,
-    isAvailable: match !== null,
-    plexGuid: match?.plexGuid || null,
+    isAvailable: audiobookAvailable || ebookAvailable,
+    plexGuid,
+    audiobookAvailable,
+    ebookAvailable,
   };
 }
 
@@ -437,23 +486,35 @@ export async function enrichAudiobooksWithMatches(
 /**
  * Get all ASINs that are considered "available" — present in library or have completed requests.
  * Used by paginated API routes to exclude available items at the DB level.
+ *
+ * @param format - When provided, restricts the check to just that format
+ *   ('audiobook': Plex/Audiobookshelf library rows + fulfilled audiobook requests;
+ *   'ebook': BookOrbit library rows + fulfilled ebook requests). Omit for the
+ *   original combined behavior (either format).
  */
-export async function getAvailableAsins(): Promise<Set<string>> {
+export async function getAvailableAsins(format?: 'audiobook' | 'ebook'): Promise<Set<string>> {
+  const libraryWhere = format === 'ebook'
+    ? { asin: { not: null }, plexLibraryId: 'bookorbit' }
+    : format === 'audiobook'
+      ? { asin: { not: null }, plexLibraryId: { not: 'bookorbit' } }
+      : { asin: { not: null } };
+  const requestTypes: Array<'audiobook' | 'ebook'> = format ? [format] : ['audiobook', 'ebook'];
+
   const [libraryItems, completedRequests] = await Promise.all([
-    // ASINs present in the library (Plex or Audiobookshelf)
+    // ASINs present in the library (Plex or Audiobookshelf), scoped by format when given
     prisma.plexLibrary.findMany({
-      where: { asin: { not: null } },
+      where: libraryWhere,
       select: { asin: true },
       distinct: ['asin'],
     }),
-    // ASINs with fulfilled audiobook or first-class ebook requests
+    // ASINs with fulfilled requests of the relevant type(s)
     prisma.audiobook.findMany({
       where: {
         audibleAsin: { not: null },
         requests: {
           some: {
             status: { in: ['available', 'downloaded'] },
-            type: { in: ['audiobook', 'ebook'] },
+            type: { in: requestTypes },
             deletedAt: null,
           },
         },
