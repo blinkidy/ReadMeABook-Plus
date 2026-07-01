@@ -45,6 +45,14 @@ function normalizeAuthorKey(value: string): string {
   return normalizeBookKey(primaryAuthor);
 }
 
+// Books often carry an Audible subtitle ("Title: A Novel") that local ebook
+// organizers (e.g. BookOrbit) drop from filenames, so compare the part
+// before the colon too rather than requiring an exact full-title match.
+function primaryTitleKey(value: string): string {
+  const primary = value.split(':')[0] || value;
+  return normalizeBookKey(primary);
+}
+
 function isUnknownAuthor(value: string): boolean {
   const authorKey = normalizeAuthorKey(value);
   return !authorKey || authorKey === 'unknown author' || authorKey === 'unknown';
@@ -202,6 +210,7 @@ export async function findBookOrbitMatch(
 
   const titleKey = normalizeBookKey(audiobook.title);
   const authorKey = normalizeAuthorKey(audiobook.author);
+  const primaryKey = primaryTitleKey(audiobook.title);
   if (!titleKey || !authorKey) return null;
 
   const candidates = await prisma.plexLibrary.findMany({
@@ -219,7 +228,8 @@ export async function findBookOrbitMatch(
   });
 
   const titleMatches = (candidates || []).filter((candidate) => (
-    normalizeBookKey(candidate.title) === titleKey
+    normalizeBookKey(candidate.title) === titleKey ||
+    (primaryKey && primaryTitleKey(candidate.title) === primaryKey)
   ));
 
   const authorMatch = titleMatches.find((candidate) => (

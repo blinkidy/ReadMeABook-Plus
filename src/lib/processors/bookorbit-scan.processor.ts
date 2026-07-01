@@ -44,6 +44,14 @@ function normalizeAuthorKey(value: string): string {
   return normalizeBookKey(primaryAuthor);
 }
 
+// Audible titles often carry a subtitle ("Title: A Novel") that BookOrbit
+// filenames/folders drop, so compare the part before the colon too rather
+// than requiring an exact full-title match.
+function primaryTitleKey(value: string): string {
+  const primary = value.split(':')[0] || value;
+  return normalizeBookKey(primary);
+}
+
 function isUnknownAuthor(value: string): boolean {
   const authorKey = normalizeAuthorKey(value);
   return !authorKey || authorKey === 'unknown author' || authorKey === 'unknown';
@@ -166,6 +174,26 @@ async function discoverEbook(rootPath: string, filePath: string): Promise<Discov
       author = cached.author;
       return { filePath, title, author, asin: cached.asin };
     }
+
+    // Fall back to matching by primary title (before any subtitle) when the
+    // BookOrbit filename dropped the Audible subtitle, e.g. "The Housemaid"
+    // vs the cached "The Housemaid: A Novel".
+    if (!isUnknownAuthor(author)) {
+      const primaryKey = primaryTitleKey(title);
+      const authorCandidates = await prisma.audibleCache.findMany({
+        where: { author: { equals: author, mode: 'insensitive' } },
+        select: { asin: true, title: true, author: true },
+        take: 200,
+      });
+      const subtitleMatches = authorCandidates.filter(
+        (candidate) => primaryTitleKey(candidate.title) === primaryKey,
+      );
+      if (subtitleMatches.length === 1) {
+        title = subtitleMatches[0].title;
+        author = subtitleMatches[0].author;
+        return { filePath, title, author, asin: subtitleMatches[0].asin };
+      }
+    }
   }
 
   return { filePath, title, author, asin };
@@ -187,6 +215,7 @@ async function findMatchingEbookRequestIds(book: DiscoveredEbook): Promise<strin
 
   const bookTitleKey = normalizeBookKey(book.title);
   const bookAuthorKey = normalizeAuthorKey(book.author);
+  const bookPrimaryKey = primaryTitleKey(book.title);
   if (!bookTitleKey) return [];
 
   const candidates = await prisma.request.findMany({
@@ -209,7 +238,9 @@ async function findMatchingEbookRequestIds(book: DiscoveredEbook): Promise<strin
   return candidates
     .filter((request) => {
       const requestTitleKey = normalizeBookKey(request.audiobook.title);
-      if (requestTitleKey !== bookTitleKey) return false;
+      const titleMatches = requestTitleKey === bookTitleKey ||
+        (bookPrimaryKey && primaryTitleKey(request.audiobook.title) === bookPrimaryKey);
+      if (!titleMatches) return false;
 
       const requestAuthorKey = normalizeAuthorKey(request.audiobook.author);
       return (
