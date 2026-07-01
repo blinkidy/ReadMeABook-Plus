@@ -654,52 +654,117 @@ export function AudiobookDetailsModal({
             className="sticky bottom-0 z-20 p-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-t border-gray-200/50 dark:border-gray-700/50"
             style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
           >
-            <div className="flex items-center gap-3">
-              {/* Main Action */}
-              <div className="flex-1">
-                {requestableFormats.length > 1 && (
-                  <div className={`mb-2 grid gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800 ${
-                    requestableFormats.includes('both') ? 'grid-cols-3' : 'grid-cols-2'
-                  }`}>
+            <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[1fr_auto] sm:items-center sm:gap-3">
+              {/* Format Selector - own row, full width */}
+              {requestableFormats.length > 1 && (
+                <div className={`sm:col-span-2 grid gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800 ${
+                  requestableFormats.includes('both') ? 'grid-cols-3' : 'grid-cols-2'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={() => setRequestFormat('audiobook')}
+                    disabled={!requestableFormats.includes('audiobook')}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                      requestFormat === 'audiobook'
+                        ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
+                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                    }`}
+                  >
+                    Audiobook
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRequestFormat('epub')}
+                    disabled={!requestableFormats.includes('epub')}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                      requestFormat === 'epub'
+                        ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
+                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                    }`}
+                  >
+                    EPUB
+                  </button>
+                  {requestableFormats.includes('both') && (
                     <button
                       type="button"
-                      onClick={() => setRequestFormat('audiobook')}
-                      disabled={!requestableFormats.includes('audiobook')}
+                      onClick={() => setRequestFormat('both')}
                       className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                        requestFormat === 'audiobook'
+                        requestFormat === 'both'
                           ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
                           : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
                       }`}
                     >
-                      Audiobook
+                      Both
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setRequestFormat('epub')}
-                      disabled={!requestableFormats.includes('epub')}
-                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                        requestFormat === 'epub'
-                          ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
-                          : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-                      }`}
-                    >
-                      EPUB
-                    </button>
-                    {requestableFormats.includes('both') && (
-                      <button
-                        type="button"
-                        onClick={() => setRequestFormat('both')}
-                        className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                          requestFormat === 'both'
-                            ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
-                            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-                        }`}
-                      >
-                        Both
-                      </button>
-                    )}
-                  </div>
+                  )}
+                </div>
+              )}
+
+              {/* Icon Actions - own row on mobile, right column on desktop */}
+              {(canSearchAudiobook || (canRequestEbook && audiobookAvailable) || (user && !isLoadingIgnore)) && (
+              <div className="flex items-center justify-end gap-3 order-2 sm:order-none sm:col-start-2 sm:row-start-2">
+                {/* Interactive Search - only when the audiobook is missing and user has permission */}
+                {canSearchAudiobook && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false) && (
+                  <button
+                    onClick={handleInteractiveSearch}
+                    disabled={!user}
+                    className="p-3 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
+                    title="Interactive Search"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </button>
                 )}
+
+                {/* Manual Import - admin only, hidden during active processing and completed states */}
+                {user?.role === 'admin' && canSearchAudiobook && !['downloading', 'processing', 'searching', 'downloaded', 'completed', 'available'].includes(audiobookEffectiveStatus || '') && (
+                  <button
+                    onClick={() => setShowManualImport(true)}
+                    className="p-3 rounded-xl bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 hover:bg-teal-200 dark:hover:bg-teal-900/50 transition-colors"
+                    title="Manual Import"
+                  >
+                    <FolderArrowDownIcon className="w-6 h-6" />
+                  </button>
+                )}
+
+                {/* Ebook interactive search - available when the audiobook exists and the ebook is missing */}
+                {canRequestEbook && audiobookAvailable && user && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false) && (
+                  <button
+                    onClick={() => setShowInteractiveSearchEbook(true)}
+                    className="p-3 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
+                    title="Search Ebook Sources"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                  </button>
+                )}
+
+                {/* Ignore Toggle - always visible when user is logged in */}
+                {user && !isLoadingIgnore && (
+                  <button
+                    onClick={handleToggleIgnore}
+                    disabled={isTogglingIgnore}
+                    className={`p-3 rounded-xl transition-colors disabled:opacity-50 ${
+                      isIgnored
+                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                        : 'bg-gray-100 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                    title={isIgnored ? 'Stop Ignoring — auto-requests will resume for this book' : 'Ignore from Auto-Requests'}
+                  >
+                    {isIgnored ? (
+                      <EyeSlashSolidIcon className="w-6 h-6" />
+                    ) : (
+                      <EyeSlashIcon className="w-6 h-6" />
+                    )}
+                  </button>
+                )}
+              </div>
+              )}
+
+              {/* Main Action */}
+              <div className="order-3 sm:order-none sm:col-start-1 sm:row-start-2">
                 {bothFormatsAvailable ? (
                   <button
                     disabled
@@ -753,65 +818,6 @@ export function AudiobookDetailsModal({
                   </button>
                 )}
               </div>
-
-              {/* Interactive Search - only when the audiobook is missing and user has permission */}
-              {canSearchAudiobook && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false) && (
-                <button
-                  onClick={handleInteractiveSearch}
-                  disabled={!user}
-                  className="p-3 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
-                  title="Interactive Search"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </button>
-              )}
-
-              {/* Manual Import - admin only, hidden during active processing and completed states */}
-              {user?.role === 'admin' && canSearchAudiobook && !['downloading', 'processing', 'searching', 'downloaded', 'completed', 'available'].includes(audiobookEffectiveStatus || '') && (
-                <button
-                  onClick={() => setShowManualImport(true)}
-                  className="p-3 rounded-xl bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 hover:bg-teal-200 dark:hover:bg-teal-900/50 transition-colors"
-                  title="Manual Import"
-                >
-                  <FolderArrowDownIcon className="w-6 h-6" />
-                </button>
-              )}
-
-              {/* Ebook interactive search - available when the audiobook exists and the ebook is missing */}
-              {canRequestEbook && audiobookAvailable && user && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false) && (
-                <button
-                  onClick={() => setShowInteractiveSearchEbook(true)}
-                  className="p-3 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
-                  title="Search Ebook Sources"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
-                </button>
-              )}
-
-              {/* Ignore Toggle - always visible when user is logged in */}
-              {user && !isLoadingIgnore && (
-                <button
-                  onClick={handleToggleIgnore}
-                  disabled={isTogglingIgnore}
-                  className={`p-3 rounded-xl transition-colors disabled:opacity-50 ${
-                    isIgnored
-                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                      : 'bg-gray-100 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
-                  }`}
-                  title={isIgnored ? 'Stop Ignoring — auto-requests will resume for this book' : 'Ignore from Auto-Requests'}
-                >
-                  {isIgnored ? (
-                    <EyeSlashSolidIcon className="w-6 h-6" />
-                  ) : (
-                    <EyeSlashIcon className="w-6 h-6" />
-                  )}
-                </button>
-              )}
-
             </div>
 
             {/* Admin Actions Row (Approve / Search / Deny) — injected by admin pages */}
