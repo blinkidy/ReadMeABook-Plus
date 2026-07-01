@@ -308,6 +308,127 @@ describe('audiobook-matcher', () => {
     expect((results[0] as any).requestStatus).toBe('available');
     expect((results[0] as any).requestId).toBe('r-ebook');
   });
+
+  it('reports audiobookAvailable and ebookAvailable independently when only the audiobook is owned', async () => {
+    prismaMock.plexLibrary.findMany.mockResolvedValueOnce([
+      { plexGuid: 'plex://guid-1', asin: 'ASIN1', plexLibraryId: 'audiobooks' },
+    ]);
+
+    const { enrichAudiobookWithMatch } = await import('@/lib/utils/audiobook-matcher');
+    const result = await enrichAudiobookWithMatch({ asin: 'ASIN1', title: 'Book', author: 'Author' });
+
+    expect(result.isAvailable).toBe(true);
+    expect(result.audiobookAvailable).toBe(true);
+    expect(result.ebookAvailable).toBe(false);
+    expect(result.plexGuid).toBe('plex://guid-1');
+  });
+
+  it('reports ebookAvailable only when the matching row is a BookOrbit library row', async () => {
+    prismaMock.plexLibrary.findMany.mockResolvedValueOnce([
+      { plexGuid: 'bookorbit://guid-1', asin: 'ASIN1', plexLibraryId: 'bookorbit' },
+    ]);
+
+    const { enrichAudiobookWithMatch } = await import('@/lib/utils/audiobook-matcher');
+    const result = await enrichAudiobookWithMatch({ asin: 'ASIN1', title: 'Book', author: 'Author' });
+
+    expect(result.isAvailable).toBe(true);
+    expect(result.audiobookAvailable).toBe(false);
+    expect(result.ebookAvailable).toBe(true);
+  });
+
+  it('reports both formats available when both an audiobook and BookOrbit row match', async () => {
+    prismaMock.plexLibrary.findMany.mockResolvedValueOnce([
+      { plexGuid: 'plex://guid-1', asin: 'ASIN1', plexLibraryId: 'audiobooks' },
+      { plexGuid: 'bookorbit://guid-1', asin: 'ASIN1', plexLibraryId: 'bookorbit' },
+    ]);
+
+    const { enrichAudiobookWithMatch } = await import('@/lib/utils/audiobook-matcher');
+    const result = await enrichAudiobookWithMatch({ asin: 'ASIN1', title: 'Book', author: 'Author' });
+
+    expect(result.audiobookAvailable).toBe(true);
+    expect(result.ebookAvailable).toBe(true);
+  });
+
+  it('falls back to the BookOrbit fuzzy match for ebookAvailable when no direct ASIN row exists', async () => {
+    prismaMock.plexLibrary.findMany
+      .mockResolvedValueOnce([]) // no direct ASIN match
+      .mockResolvedValueOnce([
+        { plexGuid: 'bookorbit://fuzzy', plexRatingKey: null, title: 'Book', author: 'Author', asin: null, isbn: null },
+      ]);
+
+    const { enrichAudiobookWithMatch } = await import('@/lib/utils/audiobook-matcher');
+    const result = await enrichAudiobookWithMatch({ asin: 'ASIN1', title: 'Book', author: 'Author' });
+
+    expect(result.audiobookAvailable).toBe(false);
+    expect(result.ebookAvailable).toBe(true);
+  });
+});
+
+describe('getAvailableAsins', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('scopes library rows and request types to "audiobook" when a format is given', async () => {
+    prismaMock.plexLibrary.findMany.mockResolvedValue([]);
+    prismaMock.audiobook.findMany.mockResolvedValue([]);
+
+    const { getAvailableAsins } = await import('@/lib/utils/audiobook-matcher');
+    await getAvailableAsins('audiobook');
+
+    expect(prismaMock.plexLibrary.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { asin: { not: null }, plexLibraryId: { not: 'bookorbit' } },
+      })
+    );
+    expect(prismaMock.audiobook.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          requests: { some: expect.objectContaining({ type: { in: ['audiobook'] } }) },
+        }),
+      })
+    );
+  });
+
+  it('scopes library rows and request types to "ebook" when a format is given', async () => {
+    prismaMock.plexLibrary.findMany.mockResolvedValue([]);
+    prismaMock.audiobook.findMany.mockResolvedValue([]);
+
+    const { getAvailableAsins } = await import('@/lib/utils/audiobook-matcher');
+    await getAvailableAsins('ebook');
+
+    expect(prismaMock.plexLibrary.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { asin: { not: null }, plexLibraryId: 'bookorbit' },
+      })
+    );
+    expect(prismaMock.audiobook.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          requests: { some: expect.objectContaining({ type: { in: ['ebook'] } }) },
+        }),
+      })
+    );
+  });
+
+  it('defaults to combined (either format) behavior when no format is given', async () => {
+    prismaMock.plexLibrary.findMany.mockResolvedValue([]);
+    prismaMock.audiobook.findMany.mockResolvedValue([]);
+
+    const { getAvailableAsins } = await import('@/lib/utils/audiobook-matcher');
+    await getAvailableAsins();
+
+    expect(prismaMock.plexLibrary.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { asin: { not: null } } })
+    );
+    expect(prismaMock.audiobook.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          requests: { some: expect.objectContaining({ type: { in: ['audiobook', 'ebook'] } }) },
+        }),
+      })
+    );
+  });
 });
 
 

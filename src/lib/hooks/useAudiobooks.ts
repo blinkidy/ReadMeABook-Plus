@@ -25,7 +25,9 @@ export interface Audiobook {
   series?: string;         // Series name (e.g., "A Song of Ice and Fire")
   seriesPart?: string;     // Position in series (e.g., "1", "1.5")
   seriesAsin?: string;     // Audible ASIN for the series (links to /series/{asin})
-  isAvailable?: boolean;  // Set by real-time matching against plex_library
+  isAvailable?: boolean;  // Set by real-time matching against plex_library (either format)
+  audiobookAvailable?: boolean;  // Owned specifically as an audiobook
+  ebookAvailable?: boolean;  // Owned specifically as an ebook
   plexGuid?: string | null;
   dbId?: string | null;
   isRequested?: boolean;  // Set if ANY user has requested this audiobook
@@ -39,8 +41,16 @@ export interface Audiobook {
   publisherName?: string;
 }
 
-export function useAudiobooks(type: 'popular' | 'new-releases', limit: number = 20, page: number = 1, hideAvailable: boolean = false) {
-  const hideParam = hideAvailable ? '&hideAvailable=true' : '';
+export function useAudiobooks(
+  type: 'popular' | 'new-releases',
+  limit: number = 20,
+  page: number = 1,
+  hideAudiobookAvailable: boolean = false,
+  hideEbookAvailable: boolean = false
+) {
+  const hideParam =
+    (hideAudiobookAvailable ? '&hideAudiobookAvailable=true' : '') +
+    (hideEbookAvailable ? '&hideEbookAvailable=true' : '');
   const endpoint =
     type === 'popular'
       ? `/api/audiobooks/popular?page=${page}&limit=${limit}${hideParam}`

@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
-    const hideAvailable = searchParams.get('hideAvailable') === 'true';
+    const hideAudiobookAvailable = searchParams.get('hideAudiobookAvailable') === 'true';
+    const hideEbookAvailable = searchParams.get('hideEbookAvailable') === 'true';
 
     // Validate pagination parameters
     if (page < 1 || limit < 1 || limit > 100) {
@@ -42,11 +43,17 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * limit;
 
-    // When hideAvailable is enabled, exclude ASINs that are in the library or have completed requests
+    // When either toggle is enabled, exclude ASINs already owned in that format
     let excludedAsins: string[] = [];
-    if (hideAvailable) {
-      const availableSet = await getAvailableAsins();
-      excludedAsins = [...availableSet];
+    if (hideAudiobookAvailable || hideEbookAvailable) {
+      const excludedSet = new Set<string>();
+      if (hideAudiobookAvailable) {
+        for (const asin of await getAvailableAsins('audiobook')) excludedSet.add(asin);
+      }
+      if (hideEbookAvailable) {
+        for (const asin of await getAvailableAsins('ebook')) excludedSet.add(asin);
+      }
+      excludedAsins = [...excludedSet];
     }
 
     const whereClause: any = { categoryId: NEW_RELEASES_CATEGORY_ID };
