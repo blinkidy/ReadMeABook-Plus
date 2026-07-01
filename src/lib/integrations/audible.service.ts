@@ -146,6 +146,11 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+function isTruncatedDescription(description: string | undefined): boolean {
+  if (!description) return true;
+  return /(\.\.\.|…)\s*$/.test(description.trim());
+}
+
 function mapCatalogProduct(product: CatalogProduct): AudibleAudiobook {
   const author = product.authors?.map((a) => a.name).join(', ') ?? '';
   const authorAsin = product.authors?.[0]?.asin ?? undefined;
@@ -653,6 +658,24 @@ export class AudibleService {
       const audnexusData = await this.fetchFromAudnexus(asin);
       if (audnexusData) {
         logger.info(` Successfully fetched from Audnexus for "${audnexusData.title}"`);
+
+        // Audnexus sometimes only has a short marketing teaser (already cut off
+        // with an ellipsis) rather than the full publisher summary. In that case,
+        // pull the fuller description from Audible's own catalog API without
+        // discarding the rest of Audnexus's (generally more complete) data.
+        if (isTruncatedDescription(audnexusData.description)) {
+          try {
+            const catalogData = await this.fetchAudibleDetailsFromApi(asin);
+            if (catalogData?.description && catalogData.description.length > (audnexusData.description?.length ?? 0)) {
+              audnexusData.description = catalogData.description;
+            }
+          } catch (error) {
+            logger.debug(`Catalog description backfill failed for ${asin}`, {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+
         return audnexusData;
       }
 
