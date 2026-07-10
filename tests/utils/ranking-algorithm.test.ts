@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { RankingAlgorithm, rankTorrents } from '@/lib/utils/ranking-algorithm';
+import { RankingAlgorithm, rankTorrents, rankEbookTorrents } from '@/lib/utils/ranking-algorithm';
 
 const MB = 1024 * 1024;
 
@@ -1396,6 +1396,43 @@ describe('ranking-algorithm', () => {
 
       expect(ranked).toHaveLength(1);
       expect(ranked[0].bonusModifiers.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('rankEbookTorrents size filtering', () => {
+    const ebookTorrent = {
+      indexer: 'IndexerA',
+      title: 'Great Book - Author Name',
+      seeders: 10,
+      leechers: 1,
+      publishDate: new Date('2024-01-01T00:00:00Z'),
+      downloadUrl: 'magnet:?xt=urn:btih:abc',
+      guid: 'guid-1',
+    };
+
+    it('drops ebooks over 20 MB by default (automatic mode)', () => {
+      const small = { ...ebookTorrent, guid: 'small', size: 5 * MB };
+      const large = { ...ebookTorrent, guid: 'large', size: 25 * MB };
+
+      const ranked = rankEbookTorrents(
+        [small, large],
+        { title: 'Great Book', author: 'Author Name', preferredFormat: 'epub' }
+      );
+
+      expect(ranked.map((r) => r.guid)).toEqual(['small']);
+    });
+
+    it('keeps ebooks over 20 MB when skipSizeFilter is true (interactive mode)', () => {
+      const small = { ...ebookTorrent, guid: 'small', size: 5 * MB };
+      const large = { ...ebookTorrent, guid: 'large', size: 25 * MB };
+
+      const ranked = rankEbookTorrents(
+        [small, large],
+        { title: 'Great Book', author: 'Author Name', preferredFormat: 'epub' },
+        { skipSizeFilter: true }
+      );
+
+      expect(ranked.map((r) => r.guid).sort()).toEqual(['large', 'small']);
     });
   });
 });

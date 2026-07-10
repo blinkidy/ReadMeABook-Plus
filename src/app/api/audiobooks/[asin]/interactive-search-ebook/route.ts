@@ -29,20 +29,6 @@ import { cleanIndexerSearchTitle } from '@/lib/utils/search-title';
 
 const logger = RMABLogger.create('API.Audiobooks.InteractiveSearchEbook');
 
-// Statuses that indicate an active/in-progress ebook request
-const ACTIVE_EBOOK_STATUSES = [
-  'pending',
-  'awaiting_approval',
-  'searching',
-  'downloading',
-  'processing',
-  'downloaded',
-  'available',
-];
-
-// Statuses that allow retry via interactive search
-const RETRYABLE_STATUSES = ['failed', 'awaiting_search'];
-
 // Unified result type for frontend
 export interface EbookSearchResult {
   guid: string;
@@ -196,24 +182,12 @@ export async function POST(
         logger.info(`Created audiobook ${audiobook.id} for "${audibleData.title}"`);
       }
 
-      // Check for existing non-retryable ebook request
-      const existingEbookRequest = await prisma.request.findFirst({
-        where: {
-          audiobookId: audiobook.id,
-          type: 'ebook',
-          deletedAt: null,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      if (existingEbookRequest &&
-          ACTIVE_EBOOK_STATUSES.includes(existingEbookRequest.status) &&
-          !RETRYABLE_STATUSES.includes(existingEbookRequest.status)) {
-        return NextResponse.json({
-          error: `E-book request already exists (status: ${existingEbookRequest.status})`,
-          existingRequestId: existingEbookRequest.id,
-        }, { status: 400 });
-      }
+      // Note: an existing in-flight ebook request (e.g. status 'searching' from
+      // a prior selection) intentionally does NOT block search here. Blocking
+      // search meant a stuck/slow download made the whole interactive search
+      // return an error instead of results, which looked like every result
+      // (including the one just selected) had silently vanished. Duplicate
+      // prevention still happens at selection time (select-ebook route).
 
       // Get ebook configuration
       const configService = getConfigService();
@@ -486,6 +460,7 @@ async function searchIndexersForInteractive(
     requireAuthor: false,
     stopWords: rankLangConfig.stopWords,
     characterReplacements: rankLangConfig.characterReplacements,
+    skipSizeFilter: true, // Interactive mode - let the user decide, don't hard-drop large files
   });
 
   // Convert to unified result type
