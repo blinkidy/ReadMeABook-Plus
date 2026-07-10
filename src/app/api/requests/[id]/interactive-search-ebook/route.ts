@@ -99,30 +99,13 @@ export async function POST(
           );
         }
 
-        if (isDirectEbookSearch && !['pending', 'failed', 'awaiting_search'].includes(requestRecord.status)) {
-          return NextResponse.json(
-            { error: `Cannot search for ebook request in ${requestRecord.status} status` },
-            { status: 400 }
-          );
-        }
-
-        // Check for existing child ebook requests (sidecar mode only)
-        if (isAudiobookSidecar) {
-          const existingEbookRequest = await prisma.request.findFirst({
-            where: {
-              parentRequestId,
-              type: 'ebook',
-              deletedAt: null,
-            },
-          });
-
-          if (existingEbookRequest && !['failed', 'awaiting_search'].includes(existingEbookRequest.status)) {
-            return NextResponse.json({
-              error: `E-book request already exists (status: ${existingEbookRequest.status})`,
-              existingRequestId: existingEbookRequest.id,
-            }, { status: 400 });
-          }
-        }
+        // Note: a request already in flight (e.g. 'searching' from a prior
+        // selection) intentionally does NOT block search here, for either the
+        // direct-ebook or sidecar-child case. Blocking search meant a stuck or
+        // slow download made the entire interactive search return an error
+        // instead of results, which looked like every result had silently
+        // vanished. Duplicate prevention still happens at selection time
+        // (select-ebook route).
 
         // Get ebook configuration
         const configService = getConfigService();
@@ -397,6 +380,7 @@ async function searchIndexersForInteractive(
     requireAuthor: false,
     stopWords: rankLangConfig.stopWords,
     characterReplacements: rankLangConfig.characterReplacements,
+    skipSizeFilter: true, // Interactive mode - let the user decide, don't hard-drop large files
   });
 
   // Log ranking debug info (same format as search-ebook.processor.ts)

@@ -119,7 +119,14 @@ describe('InteractiveTorrentSearchModal', () => {
       expect(selectTorrentMock).toHaveBeenCalledWith('req-123', baseResult);
     });
     expect(onSuccess).toHaveBeenCalled();
-    expect(onClose).toHaveBeenCalled();
+
+    // Explicit "Download started" confirmation shows before the modal closes,
+    // so a click always has visible feedback even when the caller (e.g. the
+    // admin requests dropdown) doesn't wire up its own onSuccess toast.
+    expect(await screen.findByText('Download started')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled();
+    }, { timeout: 2000 });
   });
 
   it('searches by audiobook data and requests with torrent', async () => {
@@ -148,7 +155,9 @@ describe('InteractiveTorrentSearchModal', () => {
     await waitFor(() => {
       expect(requestWithTorrentMock).toHaveBeenCalledWith(fullAudiobook, baseResult);
     });
-    expect(onClose).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled();
+    }, { timeout: 2000 });
   });
 
   it('prefills and searches with a cleaned promotional title for new audiobook searches', async () => {

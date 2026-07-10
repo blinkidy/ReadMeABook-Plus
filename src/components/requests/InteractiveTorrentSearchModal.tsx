@@ -134,6 +134,12 @@ export function InteractiveTorrentSearchModal({
   const [results, setResults] = useState<(RankedTorrent & { qualityScore?: number; source?: string; ebookFormat?: string })[]>([]);
   const [confirmTorrent, setConfirmTorrent] = useState<TorrentResult | null>(null);
   const [blockedLookup, setBlockedLookup] = useState<BlockedReleaseLookup>(EMPTY_BLOCKED_LOOKUP);
+  // Explicit confirmation that the download click actually worked, shown
+  // in-modal for a beat before closing — some callers (e.g. the admin
+  // requests dropdown) don't wire up onSuccess with any feedback of their
+  // own, so relying on the parent to confirm the action left users unsure
+  // whether clicking "Download" did anything at all.
+  const [downloadFeedback, setDownloadFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Per locked decision #3, interactive search is NOT filtered — it shows
   // everything; we just mark blocked rows visually so admins know. The admin
@@ -188,6 +194,7 @@ export function InteractiveTorrentSearchModal({
     setSearchTitle(getInitialSearchTitle());
     setResults([]);
     setExpandedGuids(new Set());
+    setDownloadFeedback(null);
   }, [isOpen, getInitialSearchTitle]);
 
   // Reset blocklist lookup when modal closes; fetch when admin opens it.
@@ -316,10 +323,20 @@ export function InteractiveTorrentSearchModal({
       }
       onSuccess?.();
       setConfirmTorrent(null);
-      onClose();
+      // Show explicit confirmation before closing — the click may have
+      // worked even though nothing else in the UI visibly changes, and the
+      // real download can still fail later in the background.
+      setDownloadFeedback({ type: 'success', message: 'Download started' });
+      setTimeout(() => {
+        setDownloadFeedback(null);
+        onClose();
+      }, 1200);
     } catch (err) {
       console.error('Failed to download:', err);
       setConfirmTorrent(null);
+      const message = err instanceof Error ? err.message : 'Failed to start download';
+      setDownloadFeedback({ type: 'error', message });
+      setTimeout(() => setDownloadFeedback(null), 4000);
     } finally {
       setIsCustomConfirming(false);
     }
@@ -485,6 +502,34 @@ export function InteractiveTorrentSearchModal({
             >
               Refresh
             </button>
+          </div>
+        )}
+
+        {/* Download Feedback Overlay — explicit confirmation the click worked */}
+        {downloadFeedback && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="mx-5 flex items-center gap-3 px-5 py-4 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl shadow-black/20 animate-in zoom-in-95 duration-200">
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  downloadFeedback.type === 'success'
+                    ? 'bg-emerald-500/10 dark:bg-emerald-400/15'
+                    : 'bg-red-500/10 dark:bg-red-400/15'
+                }`}
+              >
+                {downloadFeedback.type === 'success' ? (
+                  <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+              </div>
+              <p className="text-[15px] font-medium text-gray-900 dark:text-white">
+                {downloadFeedback.message}
+              </p>
+            </div>
           </div>
         )}
 

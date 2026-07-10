@@ -56,6 +56,7 @@ export interface RankEbookTorrentsOptions {
   requireAuthor?: boolean;                   // Enforce author presence check (default: true)
   stopWords?: string[];                      // Language-specific stop words for matching
   characterReplacements?: Record<string, string>;  // Language-specific char replacements (e.g. ß→ss)
+  skipSizeFilter?: boolean;                  // Interactive mode - don't hard-drop torrents over 20MB, let user decide (default: false)
 }
 
 export interface BonusModifier {
@@ -821,13 +822,18 @@ export class RankingAlgorithm {
       requireAuthor = true,  // Safe default: require author in automatic mode
       stopWords,
       characterReplacements,
+      skipSizeFilter = false,
     } = options;
 
-    // Filter out files > 20 MB (too large for ebooks)
-    const filteredTorrents = torrents.filter((torrent) => {
-      const sizeMB = torrent.size / (1024 * 1024);
-      return sizeMB <= 20;
-    });
+    // Filter out files > 20 MB (too large for ebooks) — skipped in interactive
+    // mode so an admin/user can still see (and choose) a large omnibus/bundle
+    // instead of it silently vanishing from results.
+    const filteredTorrents = skipSizeFilter
+      ? torrents
+      : torrents.filter((torrent) => {
+          const sizeMB = torrent.size / (1024 * 1024);
+          return sizeMB <= 20;
+        });
 
     const ranked = filteredTorrents.map((torrent) => {
       // Detect ebook format from title
