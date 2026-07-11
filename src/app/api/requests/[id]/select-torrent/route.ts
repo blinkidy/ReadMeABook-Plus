@@ -31,7 +31,7 @@ export async function POST(
 
       const { id } = await params;
       const body = await req.json();
-      const { torrent } = body as { torrent: TorrentResult };
+      const { torrent, candidates } = body as { torrent: TorrentResult; candidates?: TorrentResult[] };
 
       if (!torrent) {
         return NextResponse.json(
@@ -159,7 +159,8 @@ export async function POST(
           title: requestRecord.audiobook.title,
           author: requestRecord.audiobook.author,
         },
-        torrent
+        torrent,
+        candidates
       );
 
       // Send approved notification (user has now committed to downloading)

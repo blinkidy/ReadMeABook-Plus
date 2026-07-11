@@ -59,6 +59,10 @@ export interface DownloadTorrentPayload extends JobPayload {
     author: string;
   };
   torrent: TorrentResult;
+  // Remaining ranked results (best-first), for automatic fallback if `torrent`
+  // fails for an indexer/link reason. Only candidates within a small score
+  // margin of `torrent` are actually attempted — see download-torrent.processor.ts.
+  candidates?: TorrentResult[];
 }
 
 export interface MonitorDownloadPayload extends JobPayload {
@@ -610,7 +614,8 @@ export class JobQueueService {
   async addDownloadJob(
     requestId: string,
     audiobook: { id: string; title: string; author: string },
-    torrent: TorrentResult
+    torrent: TorrentResult,
+    candidates?: TorrentResult[]
   ): Promise<string> {
     return await this.addJob(
       'download_torrent',
@@ -618,6 +623,7 @@ export class JobQueueService {
         requestId,
         audiobook,
         torrent,
+        ...(candidates && candidates.length > 0 ? { candidates } : {}),
       } as DownloadTorrentPayload,
       {
         priority: 9, // High priority - download selected torrent

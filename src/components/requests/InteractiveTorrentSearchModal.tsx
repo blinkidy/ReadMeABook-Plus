@@ -299,6 +299,10 @@ export function InteractiveTorrentSearchModal({
 
   const handleConfirmDownload = async () => {
     if (!confirmTorrent) return;
+    // Remaining ranked results, so the download job can fall back to a
+    // close-scoring alternative if this pick's indexer/link turns out bad
+    // (the job itself decides what counts as "close enough" to try).
+    const candidates = results.filter((r) => r.guid !== confirmTorrent.guid);
     try {
       if (onConfirm) {
         // Custom confirm handler (e.g., admin approve-with-torrent flow)
@@ -309,17 +313,17 @@ export function InteractiveTorrentSearchModal({
         await replaceWithTorrent(replaceIssueId, confirmTorrent);
       } else if (isEbookMode) {
         if (useAsinMode && asin) {
-          await selectEbookByAsin(asin, confirmTorrent);
+          await selectEbookByAsin(asin, confirmTorrent, candidates);
         } else if (requestId) {
-          await selectEbook(requestId, confirmTorrent);
+          await selectEbook(requestId, confirmTorrent, candidates);
         } else {
           throw new Error('Request ID or ASIN required for ebook selection');
         }
       } else if (hasRequestId) {
-        await selectTorrent(requestId, confirmTorrent);
+        await selectTorrent(requestId, confirmTorrent, candidates);
       } else {
         if (!fullAudiobook) throw new Error('Audiobook data required to create request');
-        await requestWithTorrent(fullAudiobook, confirmTorrent);
+        await requestWithTorrent(fullAudiobook, confirmTorrent, candidates);
       }
       onSuccess?.();
       setConfirmTorrent(null);

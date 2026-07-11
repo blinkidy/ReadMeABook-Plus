@@ -43,6 +43,9 @@ export async function POST(
         const { id: parentRequestId } = await params;
         const body = await request.json();
         const selectedEbook = body.ebook as SelectedEbook;
+        // Remaining ranked results — lets the download job fall back to a
+        // close-scoring alternative if this one's indexer/link turns out bad.
+        const candidates = body.candidates as SelectedEbook[] | undefined;
 
         if (!selectedEbook) {
           return NextResponse.json({ error: 'No ebook selected' }, { status: 400 });
@@ -158,6 +161,7 @@ export async function POST(
             ebookRequest.id,
             audiobook,
             selectedEbook,
+            (candidates || []).filter((c) => c.source !== 'annas_archive'),
             jobQueue
           );
         }
@@ -231,20 +235,12 @@ async function handleAnnasArchiveDownload(
 }
 
 /**
- * Handle indexer download (torrent/NZB)
+ * Map a selected ebook (or fallback candidate) to the RankedTorrent shape
+ * download-torrent.processor.ts expects.
+ * Note: format is omitted as ebook formats (epub, pdf) differ from audiobook formats (M4B, M4A, MP3)
  */
-async function handleIndexerDownload(
-  requestId: string,
-  audiobook: { id: string; title: string; author: string },
-  selectedEbook: SelectedEbook,
-  jobQueue: ReturnType<typeof getJobQueueService>
-) {
-  logger.info(`Starting indexer download for "${audiobook.title}"`);
-  logger.info(`Torrent: "${selectedEbook.title}", Indexer: ${selectedEbook.indexer}`);
-
-  // Convert to RankedTorrent shape expected by download job
-  // Note: format is omitted as ebook formats (epub, pdf) differ from audiobook formats (M4B, M4A, MP3)
-  const torrentForJob = {
+function toTorrentForJob(selectedEbook: SelectedEbook) {
+  return {
     guid: selectedEbook.guid,
     title: selectedEbook.title,
     size: selectedEbook.size,
@@ -269,13 +265,30 @@ async function handleIndexerDownload(
     },
     protocol: selectedEbook.protocol, // Pass through protocol for torrent vs usenet routing
   };
+}
+
+/**
+ * Handle indexer download (torrent/NZB)
+ */
+async function handleIndexerDownload(
+  requestId: string,
+  audiobook: { id: string; title: string; author: string },
+  selectedEbook: SelectedEbook,
+  candidates: SelectedEbook[],
+  jobQueue: ReturnType<typeof getJobQueueService>
+) {
+  logger.info(`Starting indexer download for "${audiobook.title}"`);
+  logger.info(`Torrent: "${selectedEbook.title}", Indexer: ${selectedEbook.indexer}`);
+
+  const torrentForJob = toTorrentForJob(selectedEbook);
+  const candidatesForJob = candidates.map(toTorrentForJob);
 
   // Use the download job (same as audiobooks)
   await jobQueue.addDownloadJob(requestId, {
     id: audiobook.id,
     title: audiobook.title,
     author: audiobook.author,
-  }, torrentForJob as any); // Cast to any since ebook torrents don't have audiobook format field
+  }, torrentForJob as any, candidatesForJob as any); // Cast to any since ebook torrents don't have audiobook format field
 
   logger.info(`Queued download job for request ${requestId}`);
 }

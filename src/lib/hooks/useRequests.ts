@@ -359,7 +359,7 @@ export function useSelectTorrent() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectTorrent = async (requestId: string, torrent: any) => {
+  const selectTorrent = async (requestId: string, torrent: any, candidates?: any[]) => {
     if (!accessToken) {
       throw new Error('Not authenticated');
     }
@@ -373,7 +373,7 @@ export function useSelectTorrent() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ torrent }),
+        body: JSON.stringify({ torrent, candidates }),
       });
 
       const data = await response.json();
@@ -444,7 +444,7 @@ export function useRequestWithTorrent() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const requestWithTorrent = async (audiobook: Audiobook, torrent: any) => {
+  const requestWithTorrent = async (audiobook: Audiobook, torrent: any, candidates?: any[]) => {
     if (!accessToken) {
       throw new Error('Not authenticated');
     }
@@ -458,7 +458,7 @@ export function useRequestWithTorrent() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ audiobook, torrent }),
+        body: JSON.stringify({ audiobook, torrent, candidates }),
       });
 
       const data = await response.json();
@@ -539,7 +539,7 @@ export function useSelectEbook() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectEbook = async (requestId: string, ebook: any) => {
+  const selectEbook = async (requestId: string, ebook: any, candidates?: any[]) => {
     if (!accessToken) {
       throw new Error('Not authenticated');
     }
@@ -553,7 +553,7 @@ export function useSelectEbook() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ebook }),
+        body: JSON.stringify({ ebook, candidates }),
       });
 
       const data = await response.json();
@@ -720,7 +720,7 @@ export function useSelectEbookByAsin() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectEbook = async (asin: string, ebook: any) => {
+  const selectEbook = async (asin: string, ebook: any, candidates?: any[]) => {
     if (!accessToken) {
       throw new Error('Not authenticated');
     }
@@ -734,7 +734,7 @@ export function useSelectEbookByAsin() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ebook }),
+        body: JSON.stringify({ ebook, candidates }),
       });
 
       const data = await response.json();

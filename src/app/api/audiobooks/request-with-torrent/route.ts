@@ -44,7 +44,32 @@ const RequestWithTorrentSchema = z.object({
     bitrate: z.string().optional(),
     hasChapters: z.boolean().optional(),
     protocol: z.enum(['torrent', 'usenet']).optional(), // Protocol from Prowlarr API
+    score: z.number().optional(),
+    finalScore: z.number().optional(),
   }),
+  // Remaining ranked results — lets the download job fall back to a
+  // close-scoring alternative if this torrent's indexer/link turns out bad.
+  candidates: z.array(
+    z.object({
+      guid: z.string(),
+      title: z.string(),
+      size: z.number(),
+      seeders: z.number().optional(),
+      leechers: z.number().optional(),
+      indexer: z.string(),
+      indexerId: z.number().optional(),
+      downloadUrl: z.string(),
+      infoUrl: z.string().optional(),
+      publishDate: z.string().transform((str) => new Date(str)),
+      infoHash: z.string().optional(),
+      format: z.enum(['M4B', 'M4A', 'MP3', 'OTHER']).optional(),
+      bitrate: z.string().optional(),
+      hasChapters: z.boolean().optional(),
+      protocol: z.enum(['torrent', 'usenet']).optional(),
+      score: z.number().optional(),
+      finalScore: z.number().optional(),
+    })
+  ).optional(),
 });
 
 /**
@@ -62,7 +87,7 @@ export async function POST(request: NextRequest) {
       }
 
       const body = await req.json();
-      const { audiobook, torrent } = RequestWithTorrentSchema.parse(body);
+      const { audiobook, torrent, candidates } = RequestWithTorrentSchema.parse(body);
 
       // First check: Is there an existing audiobook request in 'downloaded' or 'available' status?
       // This catches the gap where files are organized but Plex hasn't scanned yet
@@ -332,7 +357,8 @@ export async function POST(request: NextRequest) {
             title: audiobookRecord.title,
             author: audiobookRecord.author,
           },
-          torrent
+          torrent,
+          candidates
         );
 
         // Send approved notification

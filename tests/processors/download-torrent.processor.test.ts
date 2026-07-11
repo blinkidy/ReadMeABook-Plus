@@ -214,4 +214,103 @@ describe('processDownloadTorrent', () => {
 
     expect(downloadClientManagerMock.getClientServiceForProtocol).toHaveBeenCalledWith('usenet');
   });
+
+  describe('candidate fallback', () => {
+    const closeCandidate = {
+      indexer: 'IndexerB',
+      indexerId: 2,
+      title: 'Book - Author (alt)',
+      size: 48 * 1024 * 1024,
+      seeders: 8,
+      publishDate: new Date(),
+      downloadUrl: 'magnet:?xt=urn:btih:def',
+      guid: 'guid-alt',
+      format: 'M4B',
+      protocol: 'torrent',
+      score: 91,
+      finalScore: 101.8,
+    };
+
+    const farCandidate = {
+      ...closeCandidate,
+      guid: 'guid-far',
+      title: 'Book - Author (poor match)',
+      score: 40,
+      finalScore: 55,
+    };
+
+    const payloadWithCandidates = {
+      ...torrentPayload,
+      torrent: { ...torrentPayload.torrent, score: 91, finalScore: 101.9 },
+      candidates: [closeCandidate, farCandidate],
+    };
+
+    function mockQbtClient(addDownload: ReturnType<typeof vi.fn>) {
+      const qbtClientMock = { clientType: 'qbittorrent', protocol: 'torrent', addDownload };
+      downloadClientManagerMock.getClientServiceForProtocol.mockResolvedValue(qbtClientMock);
+      downloadClientManagerMock.getClientForProtocol.mockResolvedValue({
+        id: 'client-1',
+        type: 'qbittorrent',
+        enabled: true,
+        category: 'readmeabook',
+      });
+    }
+
+    it('falls back to a close-scoring candidate when the top result fails for a non-transient reason', async () => {
+      const addDownload = vi.fn()
+        .mockRejectedValueOnce(new Error('Failed to download torrent: HTTP 501'))
+        .mockResolvedValueOnce('hash-alt');
+      mockQbtClient(addDownload);
+      prismaMock.request.update.mockResolvedValue({ type: 'audiobook', user: { plexUsername: 'testuser' } });
+      prismaMock.downloadHistory.create.mockResolvedValue({ id: 'dh-alt' });
+
+      const { processDownloadTorrent } = await import('@/lib/processors/download-torrent.processor');
+      const result = await processDownloadTorrent(payloadWithCandidates);
+
+      expect(result.success).toBe(true);
+      expect(addDownload).toHaveBeenCalledTimes(2);
+      // The successful attempt used the close candidate's download URL
+      expect(addDownload).toHaveBeenLastCalledWith('magnet:?xt=urn:btih:def', expect.anything());
+      expect(prismaMock.request.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'failed' }) })
+      );
+    });
+
+    it('does not fall back to a candidate scored far below the original pick', async () => {
+      const addDownload = vi.fn().mockRejectedValue(new Error('Failed to download torrent: HTTP 501'));
+      mockQbtClient(addDownload);
+      prismaMock.request.update.mockResolvedValue({ type: 'audiobook', user: { plexUsername: 'testuser' } });
+
+      const payloadOnlyFarCandidate = {
+        ...torrentPayload,
+        torrent: { ...torrentPayload.torrent, score: 91, finalScore: 101.9 },
+        candidates: [farCandidate],
+      };
+
+      const { processDownloadTorrent } = await import('@/lib/processors/download-torrent.processor');
+      await expect(processDownloadTorrent(payloadOnlyFarCandidate)).rejects.toThrow('HTTP 501');
+
+      // Only the original result was attempted — the poor-scoring candidate was skipped
+      expect(addDownload).toHaveBeenCalledTimes(1);
+      expect(prismaMock.request.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'failed' }) })
+      );
+    });
+
+    it('stops trying candidates and lets Bull retry on a transient connection error', async () => {
+      const connectionError = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
+      const addDownload = vi.fn().mockRejectedValue(connectionError);
+      mockQbtClient(addDownload);
+      prismaMock.request.update.mockResolvedValue({ type: 'audiobook', user: { plexUsername: 'testuser' } });
+
+      const { processDownloadTorrent } = await import('@/lib/processors/download-torrent.processor');
+      await expect(processDownloadTorrent(payloadWithCandidates)).rejects.toThrow('ECONNREFUSED');
+
+      // Bails immediately on the first transient error, no fallback attempts
+      expect(addDownload).toHaveBeenCalledTimes(1);
+      expect(prismaMock.request.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'failed' }) })
+      );
+    });
+  });
 });
