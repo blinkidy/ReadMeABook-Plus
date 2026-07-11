@@ -313,7 +313,7 @@ describe('Request with torrent route', () => {
       id: 'ab-1',
       title: 'Title',
       author: 'Author',
-    }, expect.objectContaining({ guid: 'guid' }));
+    }, expect.objectContaining({ guid: 'guid' }), undefined);
   });
 });
 

@@ -70,7 +70,7 @@ export async function processSearchEbook(payload: SearchEbookPayload): Promise<a
 
     // Track whether we found a result
     let annasArchiveResult: EbookSearchResult | null = null;
-    let indexerResult: RankedEbookTorrent | null = null;
+    let indexerResult: IndexerSearchResult | null = null;
 
     // ========== STEP 1: Try Anna's Archive (if enabled) ==========
     if (annasArchiveEnabled) {
@@ -90,7 +90,7 @@ export async function processSearchEbook(payload: SearchEbookPayload): Promise<a
       indexerResult = await searchIndexers(requestId, searchAudiobook, preferredFormat, logger);
 
       if (indexerResult) {
-        logger.info(`Found ebook via indexer search (score: ${indexerResult.finalScore.toFixed(1)})`);
+        logger.info(`Found ebook via indexer search (score: ${indexerResult.best.finalScore.toFixed(1)})`);
       } else {
         logger.info(`No results from indexer search`);
       }
@@ -132,7 +132,7 @@ export async function processSearchEbook(payload: SearchEbookPayload): Promise<a
       return await handleAnnasArchiveDownload(requestId, audiobook, annasArchiveResult, preferredFormat, logger);
     } else if (indexerResult) {
       // Indexer result → Torrent/NZB download (reuse audiobook processor)
-      return await handleIndexerDownload(requestId, audiobook, indexerResult, preferredFormat, logger);
+      return await handleIndexerDownload(requestId, audiobook, indexerResult.best, indexerResult.candidates, preferredFormat, logger);
     }
 
     // This should never be reached
@@ -230,12 +230,17 @@ async function searchAnnasArchive(
 /**
  * Search indexers for ebook torrents/NZBs
  */
+interface IndexerSearchResult {
+  best: RankedEbookTorrent;
+  candidates: RankedEbookTorrent[];
+}
+
 async function searchIndexers(
   requestId: string,
   audiobook: { title: string; author: string },
   preferredFormat: string,
   logger: RMABLogger
-): Promise<RankedEbookTorrent | null> {
+): Promise<IndexerSearchResult | null> {
   const configService = getConfigService();
 
   // Get enabled indexers from configuration
@@ -417,7 +422,7 @@ async function searchIndexers(
   logger.info(`==============================================================`);
   logger.info(`Selected best result: ${bestResult.title} (final score: ${bestResult.finalScore.toFixed(1)})`);
 
-  return bestResult;
+  return { best: bestResult, candidates: filteredResults.slice(1) };
 }
 
 /**
@@ -493,6 +498,7 @@ async function handleIndexerDownload(
   requestId: string,
   audiobook: { title: string; author: string },
   result: RankedEbookTorrent,
+  candidates: RankedEbookTorrent[],
   preferredFormat: string,
   logger: RMABLogger
 ): Promise<any> {
@@ -527,7 +533,7 @@ async function handleIndexerDownload(
     id: audiobookId,
     title: audiobook.title,
     author: audiobook.author,
-  }, result);
+  }, result, candidates);
 
   return {
     success: true,

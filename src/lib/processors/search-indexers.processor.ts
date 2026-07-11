@@ -280,13 +280,15 @@ export async function processSearchIndexers(payload: SearchIndexersPayload): Pro
     logger.info(`========================================================`);
     logger.info(`Selected best result: ${bestResult.title} (final score: ${bestResult.finalScore.toFixed(1)})`);
 
-    // Trigger download job with best result
+    // Trigger download job with best result, plus the runner-up candidates so
+    // the download job can fall back to a close-scoring alternative if the
+    // top pick's indexer/link turns out to be bad.
     const jobQueue = getJobQueueService();
     await jobQueue.addDownloadJob(requestId, {
       id: audiobook.id,
       title: audiobook.title,
       author: audiobook.author,
-    }, bestResult);
+    }, bestResult, filteredResults.slice(1));
 
     return {
       success: true,

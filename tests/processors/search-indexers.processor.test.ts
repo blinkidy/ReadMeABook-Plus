@@ -103,7 +103,8 @@ describe('processSearchIndexers', () => {
     expect(jobQueueMock.addDownloadJob).toHaveBeenCalledWith(
       'req-2',
       { id: 'a2', title: 'Book', author: 'Author' },
-      expect.objectContaining({ title: 'Book - Author' })
+      expect.objectContaining({ title: 'Book - Author' }),
+      expect.anything()
     );
   });
 
@@ -207,7 +208,8 @@ describe('processSearchIndexers', () => {
     expect(jobQueueMock.addDownloadJob).toHaveBeenCalledWith(
       'req-filter-name',
       expect.objectContaining({ id: 'a-filter' }),
-      expect.objectContaining({ title: 'Good Release - Author' })
+      expect.objectContaining({ title: 'Good Release - Author' }),
+      expect.anything()
     );
   });
 
@@ -263,7 +265,8 @@ describe('processSearchIndexers', () => {
     expect(jobQueueMock.addDownloadJob).toHaveBeenCalledWith(
       'req-filter-hash',
       expect.anything(),
-      expect.objectContaining({ title: 'Good Release - Author' })
+      expect.objectContaining({ title: 'Good Release - Author' }),
+      expect.anything()
     );
   });
 

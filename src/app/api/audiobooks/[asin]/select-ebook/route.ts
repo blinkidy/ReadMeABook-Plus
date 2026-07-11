@@ -63,6 +63,9 @@ export async function POST(
       const { asin } = await params;
       const body = await request.json();
       const selectedEbook = body.ebook as SelectedEbook;
+      // Remaining ranked results — lets the download job fall back to a
+      // close-scoring alternative if this one's indexer/link turns out bad.
+      const candidates = body.candidates as SelectedEbook[] | undefined;
 
       if (!asin || asin.length !== 10) {
         return NextResponse.json(
@@ -316,6 +319,7 @@ export async function POST(
             ebookRequest.id,
             audiobook,
             selectedEbook,
+            (candidates || []).filter((c) => c.source !== 'annas_archive'),
             jobQueue
           );
         }
@@ -400,18 +404,10 @@ async function handleAnnasArchiveDownload(
 }
 
 /**
- * Handle indexer download (torrent/NZB)
+ * Map a selected ebook (or fallback candidate) to the shape download-torrent.processor.ts expects.
  */
-async function handleIndexerDownload(
-  requestId: string,
-  audiobook: { id: string; title: string; author: string },
-  selectedEbook: SelectedEbook,
-  jobQueue: ReturnType<typeof getJobQueueService>
-) {
-  logger.info(`Starting indexer download for "${audiobook.title}"`);
-  logger.info(`Torrent: "${selectedEbook.title}", Indexer: ${selectedEbook.indexer}`);
-
-  const torrentForJob = {
+function toTorrentForJob(selectedEbook: SelectedEbook) {
+  return {
     guid: selectedEbook.guid,
     title: selectedEbook.title,
     size: selectedEbook.size,
@@ -436,12 +432,29 @@ async function handleIndexerDownload(
     },
     protocol: selectedEbook.protocol,
   };
+}
+
+/**
+ * Handle indexer download (torrent/NZB)
+ */
+async function handleIndexerDownload(
+  requestId: string,
+  audiobook: { id: string; title: string; author: string },
+  selectedEbook: SelectedEbook,
+  candidates: SelectedEbook[],
+  jobQueue: ReturnType<typeof getJobQueueService>
+) {
+  logger.info(`Starting indexer download for "${audiobook.title}"`);
+  logger.info(`Torrent: "${selectedEbook.title}", Indexer: ${selectedEbook.indexer}`);
+
+  const torrentForJob = toTorrentForJob(selectedEbook);
+  const candidatesForJob = candidates.map(toTorrentForJob);
 
   await jobQueue.addDownloadJob(requestId, {
     id: audiobook.id,
     title: audiobook.title,
     author: audiobook.author,
-  }, torrentForJob as any);
+  }, torrentForJob as any, candidatesForJob as any);
 
   logger.info(`Queued download job for request ${requestId}`);
 }

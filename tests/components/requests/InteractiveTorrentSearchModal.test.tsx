@@ -116,7 +116,7 @@ describe('InteractiveTorrentSearchModal', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Download' }));
 
     await waitFor(() => {
-      expect(selectTorrentMock).toHaveBeenCalledWith('req-123', baseResult);
+      expect(selectTorrentMock).toHaveBeenCalledWith('req-123', baseResult, []);
     });
     expect(onSuccess).toHaveBeenCalled();
 
@@ -153,7 +153,7 @@ describe('InteractiveTorrentSearchModal', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Download' }));
 
     await waitFor(() => {
-      expect(requestWithTorrentMock).toHaveBeenCalledWith(fullAudiobook, baseResult);
+      expect(requestWithTorrentMock).toHaveBeenCalledWith(fullAudiobook, baseResult, []);
     });
     await waitFor(() => {
       expect(onClose).toHaveBeenCalled();
