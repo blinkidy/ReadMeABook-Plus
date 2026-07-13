@@ -10,6 +10,7 @@ import { getDownloadClientManager } from '../services/download-client-manager.se
 import { ProwlarrService } from '../integrations/prowlarr.service';
 import { RMABLogger } from '../utils/logger';
 import { isTransientConnectionError } from '../utils/connection-errors';
+import { addAutoBlock } from '../services/blocklist.service';
 import type { TorrentResult } from '../utils/ranking-algorithm';
 
 // A fallback candidate must score within this many points of the originally
@@ -18,6 +19,10 @@ import type { TorrentResult } from '../utils/ranking-algorithm';
 const MAX_FALLBACK_SCORE_DROP = 10;
 // Total results tried (including the original selection) before giving up.
 const MAX_DOWNLOAD_ATTEMPTS = 3;
+// Stop auto-re-searching once this many releases have been grab-blocked for a
+// request — each failed grab adds a blocklist row, so this bounds the
+// block → re-search → block loop at roughly 2-3 full cycles.
+const MAX_GRAB_FAIL_BLOCKS = 6;
 
 type JobLogger = ReturnType<typeof RMABLogger.forJob>;
 
@@ -204,14 +209,40 @@ export async function processDownloadTorrent(payload: DownloadTorrentPayload): P
         throw error;
       }
 
-      logger.error(
-        `Result ${i + 1}/${attempts.length} failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Result ${i + 1}/${attempts.length} failed: ${errorMessage}`);
+
+      // Block this release for this request so a re-search doesn't pick the
+      // same dead link again. Scoped to the failing indexer (see
+      // filter-blocked-results) — the same release may work elsewhere.
+      await addAutoBlock({
+        requestId,
+        releaseName: candidate.title,
+        releaseHash: candidate.infoHash ?? null,
+        indexerName: candidate.indexer ?? null,
+        indexerId: candidate.indexerId ?? null,
+        source: 'grab_fail',
+        reason: 'Indexer failed to serve download',
+        reasonDetail: errorMessage,
+        jobId,
+      });
     }
   }
 
   // Every result we were willing to try (original selection + close-scoring
-  // fallbacks) failed for a non-transient (indexer/link) reason.
+  // fallbacks) failed for a non-transient (indexer/link) reason. The failed
+  // releases are now blocklisted, so trigger a fresh search — it will skip
+  // them and can pick a result the original candidate list never contained.
+  const requeued = await requeueSearchAfterGrabFailure(requestId, audiobook, logger);
+  if (requeued) {
+    return {
+      success: false,
+      requeued: true,
+      message: 'All download attempts failed; blocked failing release(s) and queued a fresh search',
+      requestId,
+    };
+  }
+
   await prisma.request.update({
     where: { id: requestId },
     data: {
@@ -222,4 +253,70 @@ export async function processDownloadTorrent(payload: DownloadTorrentPayload): P
   });
 
   throw lastError;
+}
+
+/**
+ * Queue a fresh type-appropriate search after all grab attempts failed.
+ * Returns false when the re-search budget (MAX_GRAB_FAIL_BLOCKS) is spent or
+ * the request can't be loaded — the caller then fails the request for real.
+ */
+async function requeueSearchAfterGrabFailure(
+  requestId: string,
+  audiobook: { id: string; title: string; author: string },
+  logger: JobLogger
+): Promise<boolean> {
+  try {
+    const grabFailBlocks = await prisma.blockedRelease.count({
+      where: { requestId, source: 'grab_fail' },
+    });
+    if (grabFailBlocks > MAX_GRAB_FAIL_BLOCKS) {
+      logger.warn(
+        `Request ${requestId} has ${grabFailBlocks} grab-blocked releases (max ${MAX_GRAB_FAIL_BLOCKS}) — not re-searching again`
+      );
+      return false;
+    }
+
+    const request = await prisma.request.findUnique({
+      where: { id: requestId },
+      include: { audiobook: { select: { audibleAsin: true } } },
+    });
+    if (!request) {
+      logger.warn(`Request ${requestId} not found — cannot queue re-search`);
+      return false;
+    }
+
+    await prisma.request.update({
+      where: { id: requestId },
+      data: {
+        status: 'pending',
+        progress: 0,
+        errorMessage: null,
+        updatedAt: new Date(),
+      },
+    });
+
+    const searchPayload = {
+      id: audiobook.id,
+      title: audiobook.title,
+      author: audiobook.author,
+      asin: request.audiobook?.audibleAsin || undefined,
+    };
+
+    const jobQueue = getJobQueueService();
+    if (request.type === 'ebook') {
+      await jobQueue.addSearchEbookJob(requestId, searchPayload);
+    } else {
+      await jobQueue.addSearchJob(requestId, searchPayload);
+    }
+
+    logger.info(
+      `Queued fresh ${request.type === 'ebook' ? 'ebook' : 'indexer'} search for request ${requestId} after grab failure (${grabFailBlocks} release(s) blocked so far)`
+    );
+    return true;
+  } catch (error) {
+    logger.error(
+      `Failed to queue re-search for request ${requestId}: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+    return false;
+  }
 }

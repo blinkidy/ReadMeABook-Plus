@@ -17,7 +17,7 @@ import { normalizeReleaseKey } from '@/lib/utils/release-key';
 
 const logger = RMABLogger.create('Blocklist');
 
-export type BlockSource = 'organize_fail' | 'download_fail';
+export type BlockSource = 'organize_fail' | 'download_fail' | 'grab_fail';
 
 export interface AddAutoBlockInput {
   requestId: string;

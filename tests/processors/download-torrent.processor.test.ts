@@ -297,6 +297,88 @@ describe('processDownloadTorrent', () => {
       );
     });
 
+    it('blocks failing releases and queues a fresh ebook search when all attempts fail', async () => {
+      const addDownload = vi.fn().mockRejectedValue(new Error('Failed to download torrent: HTTP 500'));
+      mockQbtClient(addDownload);
+      prismaMock.request.update.mockResolvedValue({ type: 'ebook', user: { plexUsername: 'testuser' } });
+      prismaMock.blockedRelease.upsert.mockResolvedValue({ createdAt: new Date() });
+      prismaMock.blockedRelease.count.mockResolvedValue(2);
+      prismaMock.request.findUnique.mockResolvedValue({
+        id: 'req-1',
+        type: 'ebook',
+        audiobook: { audibleAsin: 'ASIN-1' },
+      });
+
+      const { processDownloadTorrent } = await import('@/lib/processors/download-torrent.processor');
+      const result = await processDownloadTorrent(payloadWithCandidates);
+
+      // Original + close candidate attempted (far candidate gated by score)
+      expect(addDownload).toHaveBeenCalledTimes(2);
+      // Both failing releases were grab-blocked with the indexer recorded
+      expect(prismaMock.blockedRelease.upsert).toHaveBeenCalledTimes(2);
+      expect(prismaMock.blockedRelease.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            source: 'grab_fail',
+            indexerId: 1,
+            reasonDetail: expect.stringContaining('HTTP 500'),
+          }),
+        })
+      );
+      // Request went back to pending and a fresh ebook search was queued
+      expect(prismaMock.request.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'pending' }) })
+      );
+      expect(jobQueueMock.addSearchEbookJob).toHaveBeenCalledWith(
+        'req-1',
+        expect.objectContaining({ asin: 'ASIN-1' })
+      );
+      expect(prismaMock.request.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'failed' }) })
+      );
+      expect(result.requeued).toBe(true);
+    });
+
+    it('queues an audiobook search for audiobook requests after grab failure', async () => {
+      const addDownload = vi.fn().mockRejectedValue(new Error('Failed to download torrent: HTTP 500'));
+      mockQbtClient(addDownload);
+      prismaMock.request.update.mockResolvedValue({ type: 'audiobook', user: { plexUsername: 'testuser' } });
+      prismaMock.blockedRelease.upsert.mockResolvedValue({ createdAt: new Date() });
+      prismaMock.blockedRelease.count.mockResolvedValue(1);
+      prismaMock.request.findUnique.mockResolvedValue({
+        id: 'req-1',
+        type: 'audiobook',
+        audiobook: { audibleAsin: 'ASIN-2' },
+      });
+
+      const { processDownloadTorrent } = await import('@/lib/processors/download-torrent.processor');
+      const result = await processDownloadTorrent(payloadWithCandidates);
+
+      expect(jobQueueMock.addSearchJob).toHaveBeenCalledWith(
+        'req-1',
+        expect.objectContaining({ asin: 'ASIN-2' })
+      );
+      expect(jobQueueMock.addSearchEbookJob).not.toHaveBeenCalled();
+      expect(result.requeued).toBe(true);
+    });
+
+    it('fails the request for real once the grab-fail re-search budget is exhausted', async () => {
+      const addDownload = vi.fn().mockRejectedValue(new Error('Failed to download torrent: HTTP 500'));
+      mockQbtClient(addDownload);
+      prismaMock.request.update.mockResolvedValue({ type: 'ebook', user: { plexUsername: 'testuser' } });
+      prismaMock.blockedRelease.upsert.mockResolvedValue({ createdAt: new Date() });
+      prismaMock.blockedRelease.count.mockResolvedValue(7); // over MAX_GRAB_FAIL_BLOCKS
+
+      const { processDownloadTorrent } = await import('@/lib/processors/download-torrent.processor');
+      await expect(processDownloadTorrent(payloadWithCandidates)).rejects.toThrow('HTTP 500');
+
+      expect(jobQueueMock.addSearchEbookJob).not.toHaveBeenCalled();
+      expect(jobQueueMock.addSearchJob).not.toHaveBeenCalled();
+      expect(prismaMock.request.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'failed' }) })
+      );
+    });
+
     it('stops trying candidates and lets Bull retry on a transient connection error', async () => {
       const connectionError = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
       const addDownload = vi.fn().mockRejectedValue(connectionError);

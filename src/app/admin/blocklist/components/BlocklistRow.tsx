@@ -52,6 +52,7 @@ function SourceBadge({ source }: { source: string }) {
   const styles: Record<string, string> = {
     organize_fail: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
     download_fail: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
+    grab_fail: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
     manual: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
   };
   const cls = styles[source] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
