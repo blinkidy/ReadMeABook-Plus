@@ -21,7 +21,7 @@ const logger = RMABLogger.create('API.Admin.Blocklist');
 
 const VALID_LIMITS = [25, 50, 100] as const;
 const DEFAULT_LIMIT = 50;
-const VALID_SOURCES = ['organize_fail', 'download_fail', 'manual'] as const;
+const VALID_SOURCES = ['organize_fail', 'download_fail', 'grab_fail', 'manual'] as const;
 const VALID_SORT_FIELDS = ['createdAt', 'releaseName', 'reason'] as const;
 const VALID_SORT_ORDERS = ['asc', 'desc'] as const;
 

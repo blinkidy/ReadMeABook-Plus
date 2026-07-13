@@ -60,6 +60,56 @@ describe('filterBlockedResults', () => {
     expect(blockedCount).toBe(1);
   });
 
+  it('scopes grab_fail entries to the failing indexer — same title elsewhere survives', async () => {
+    getBlocklistForRequestMock.mockResolvedValueOnce([
+      { releaseKey: 'heart bones epub', releaseHash: null, source: 'grab_fail', indexerId: 10 },
+    ]);
+    const { filterBlockedResults } = await import('@/lib/utils/filter-blocked-results');
+    const { kept, blockedCount } = await filterBlockedResults('req-1', [
+      { title: 'Heart Bones EPUB', indexerId: 10 }, // failing indexer — blocked
+      { title: 'Heart Bones EPUB', indexerId: 20 }, // identical title, other indexer — kept
+    ]);
+    expect(kept).toEqual([{ title: 'Heart Bones EPUB', indexerId: 20 }]);
+    expect(blockedCount).toBe(1);
+  });
+
+  it('scopes grab_fail hash matches to the failing indexer', async () => {
+    getBlocklistForRequestMock.mockResolvedValueOnce([
+      { releaseKey: 'other name', releaseHash: 'abc123', source: 'grab_fail', indexerId: 10 },
+    ]);
+    const { filterBlockedResults } = await import('@/lib/utils/filter-blocked-results');
+    const { kept, blockedCount } = await filterBlockedResults('req-1', [
+      { title: 'Cross Seed A', infoHash: 'abc123', indexerId: 10 }, // blocked
+      { title: 'Cross Seed B', infoHash: 'abc123', indexerId: 20 }, // same hash, other indexer — kept
+    ]);
+    expect(kept).toEqual([{ title: 'Cross Seed B', infoHash: 'abc123', indexerId: 20 }]);
+    expect(blockedCount).toBe(1);
+  });
+
+  it('treats grab_fail entries without an indexerId as global blocks', async () => {
+    getBlocklistForRequestMock.mockResolvedValueOnce([
+      { releaseKey: 'heart bones epub', releaseHash: null, source: 'grab_fail', indexerId: null },
+    ]);
+    const { filterBlockedResults } = await import('@/lib/utils/filter-blocked-results');
+    const { kept, blockedCount } = await filterBlockedResults('req-1', [
+      { title: 'Heart Bones EPUB', indexerId: 20 },
+    ]);
+    expect(kept).toEqual([]);
+    expect(blockedCount).toBe(1);
+  });
+
+  it('download_fail entries with an indexerId still block globally', async () => {
+    getBlocklistForRequestMock.mockResolvedValueOnce([
+      { releaseKey: 'bad release', releaseHash: null, source: 'download_fail', indexerId: 10 },
+    ]);
+    const { filterBlockedResults } = await import('@/lib/utils/filter-blocked-results');
+    const { kept, blockedCount } = await filterBlockedResults('req-1', [
+      { title: 'Bad Release', indexerId: 20 }, // different indexer, still blocked
+    ]);
+    expect(kept).toEqual([]);
+    expect(blockedCount).toBe(1);
+  });
+
   it('does not filter by hash when the result has no infoHash', async () => {
     getBlocklistForRequestMock.mockResolvedValueOnce([
       { releaseKey: 'unrelated', releaseHash: 'abc123' },

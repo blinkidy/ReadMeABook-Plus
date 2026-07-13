@@ -21,7 +21,7 @@ export const BLOCKLIST_PARAMS = {
 export const VALID_LIMITS = [25, 50, 100] as const;
 export type ValidLimit = (typeof VALID_LIMITS)[number];
 
-export const VALID_SOURCES = ['all', 'organize_fail', 'download_fail', 'manual'] as const;
+export const VALID_SOURCES = ['all', 'organize_fail', 'download_fail', 'grab_fail', 'manual'] as const;
 export type BlockSourceFilter = (typeof VALID_SOURCES)[number];
 
 export const VALID_SORT_FIELDS = ['createdAt', 'releaseName', 'reason'] as const;
@@ -63,12 +63,14 @@ export const SOURCE_LABELS: Record<BlockSourceFilter, string> = {
   all: 'All sources',
   organize_fail: 'Organize failure',
   download_fail: 'Download failure',
+  grab_fail: 'Grab failure',
   manual: 'Manual',
 };
 
 export const SOURCE_BADGE_LABEL: Record<string, string> = {
   organize_fail: 'Organize',
   download_fail: 'Download',
+  grab_fail: 'Grab',
   manual: 'Manual',
 };
 
