@@ -232,6 +232,20 @@ export async function POST(
       const jobQueue = getJobQueueService();
 
       if (needsApproval) {
+        // Embed fallback candidates in the stored selection so the approve flow
+        // can retry a close-scoring alternative if the pick's indexer/link is
+        // bad. Anna's Archive picks and candidates are excluded — they use the
+        // direct-download path, not the torrent download job.
+        // Candidates arrive ranked best-first; keep a handful (the download job
+        // tries at most 2 fallbacks) to avoid bloating the JSON column.
+        const indexerCandidates = (candidates || [])
+          .filter((c) => c.source !== 'annas_archive')
+          .slice(0, 5);
+        const storedSelection =
+          selectedEbook.source !== 'annas_archive' && indexerCandidates.length > 0
+            ? { ...selectedEbook, fallbackCandidates: indexerCandidates }
+            : selectedEbook;
+
         // Create or update ebook request with awaiting_approval status
         if (ebookRequest && REUSABLE_STATUSES.includes(ebookRequest.status)) {
           ebookRequest = await prisma.request.update({
@@ -240,7 +254,7 @@ export async function POST(
               status: 'awaiting_approval',
               progress: 0,
               errorMessage: null,
-              selectedTorrent: selectedEbook as any, // Store selected ebook for later
+              selectedTorrent: storedSelection as any, // Store selected ebook (+ fallback candidates) for later
               updatedAt: new Date(),
             },
           });
@@ -254,7 +268,7 @@ export async function POST(
               parentRequestId: availableRequest?.id || null,
               status: 'awaiting_approval',
               progress: 0,
-              selectedTorrent: selectedEbook as any,
+              selectedTorrent: storedSelection as any,
               customSearchTerms: availableRequest?.customSearchTerms || null,
             },
           });

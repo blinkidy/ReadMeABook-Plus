@@ -295,7 +295,12 @@ export async function POST(request: NextRequest) {
             status: 'awaiting_approval',
             type: 'audiobook', // Explicit type for user-created requests
             progress: 0,
-            selectedTorrent: torrent as any, // Store the selected torrent for later
+            // Store the selected torrent for later, embedding fallback candidates
+            // so the approve flow can retry a close-scoring alternative if the
+            // pick's indexer/link turns out bad.
+            selectedTorrent: (candidates && candidates.length > 0
+              ? { ...torrent, fallbackCandidates: candidates.slice(0, 5) }
+              : torrent) as any,
           },
           include: {
             audiobook: true,

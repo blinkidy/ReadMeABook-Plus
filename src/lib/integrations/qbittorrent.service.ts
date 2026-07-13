@@ -291,8 +291,12 @@ export class QBittorrentService implements IDownloadClient {
         return this.addTorrent(url, options, true);
       }
 
-      logger.error('Failed to add torrent', { error: error instanceof Error ? error.message : String(error) });
-      throw new Error('Failed to add torrent to qBittorrent');
+      // Preserve the underlying cause in the message — download processors
+      // classify transient errors (ECONNREFUSED etc.) by message substring,
+      // and logs need the real reason (e.g. indexer HTTP 5xx fetching .torrent).
+      const cause = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to add torrent', { error: cause });
+      throw new Error(`Failed to add torrent to qBittorrent: ${cause}`);
     }
   }
 

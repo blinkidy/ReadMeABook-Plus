@@ -42,6 +42,12 @@ const TRANSIENT_MESSAGE_PATTERNS = [
   'socket hang up',
   'network error',
   'Client network socket disconnected',
+  // Axios phrasing for gateway errors from the download client's own API.
+  // Indexer-side fetch failures are formatted differently ("Failed to
+  // download torrent: HTTP 503") and intentionally stay non-transient.
+  'status code 502',
+  'status code 503',
+  'status code 504',
 ] as const;
 
 /**

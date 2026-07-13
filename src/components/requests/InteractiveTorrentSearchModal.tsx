@@ -667,7 +667,10 @@ function ResultRow({
   onToggleExpand,
   onDownload,
 }: ResultRowProps) {
-  const score = Math.round(result.score);
+  // Display the final score (base + indexer priority/flag bonuses) — it's what
+  // the ranking sorts by, so the badge order matches the list order.
+  const score = Math.round(result.finalScore ?? result.score);
+  const baseScore = Math.round(result.score);
   const style = getScoreStyle(score);
   const isUsenet = result.protocol === 'usenet';
   const isAnnasArchive = isEbookMode && result.source === 'annas_archive';
@@ -687,7 +690,7 @@ function ResultRow({
       {/* Score Badge */}
       <div
         className={`flex-shrink-0 w-11 h-11 rounded-xl ${style.bg} flex flex-col items-center justify-center`}
-        title={`Score: ${score} (Match: ${Math.round(result.breakdown?.matchScore ?? 0)}, Format: ${Math.round(result.breakdown?.formatScore ?? 0)}, Size: ${Math.round(result.breakdown?.sizeScore ?? 0)}, Seeds: ${Math.round(result.breakdown?.seederScore ?? 0)})`}
+        title={`Score: ${score} (Base: ${baseScore}, Bonus: ${score - baseScore}, Match: ${Math.round(result.breakdown?.matchScore ?? 0)}, Format: ${Math.round(result.breakdown?.formatScore ?? 0)}, Size: ${Math.round(result.breakdown?.sizeScore ?? 0)}, Seeds: ${Math.round(result.breakdown?.seederScore ?? 0)})`}
       >
         <span className={`text-[15px] font-bold leading-none tabular-nums ${style.text}`}>
           {score}

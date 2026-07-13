@@ -79,8 +79,18 @@ export async function POST(
           const jobQueue = getJobQueueService();
           const isEbookRequest = existingRequest.type === 'ebook';
 
-          // Use admin-provided torrent (from admin interactive search) or fall back to user's pre-selected torrent
-          const effectiveTorrent = adminSelectedTorrent || existingRequest.selectedTorrent;
+          // Use admin-provided torrent (from admin interactive search) or fall back to user's pre-selected torrent.
+          // The stored selection may carry `fallbackCandidates` (close-scoring
+          // alternatives saved at request time) — split them out so the download
+          // job can fall back if the selected result's indexer/link is bad.
+          const storedSelection = existingRequest.selectedTorrent as any;
+          const storedCandidates: any[] | undefined = storedSelection?.fallbackCandidates;
+          let storedTorrent = storedSelection;
+          if (storedSelection && typeof storedSelection === 'object' && 'fallbackCandidates' in storedSelection) {
+            const { fallbackCandidates: _candidates, ...rest } = storedSelection;
+            storedTorrent = rest;
+          }
+          const effectiveTorrent = adminSelectedTorrent || storedTorrent;
 
           if (effectiveTorrent) {
             const selectedTorrent = effectiveTorrent as any;
@@ -130,7 +140,10 @@ export async function POST(
                 undefined
               );
             } else {
-              // Trigger download job with pre-selected torrent (audiobook or indexer ebook)
+              // Trigger download job with pre-selected torrent (audiobook or indexer ebook).
+              // Only forward stored candidates when downloading the user's own
+              // pick — an admin-selected torrent came from a fresh search and
+              // the stored alternatives may not relate to it.
               await jobQueue.addDownloadJob(
                 existingRequest.id,
                 {
@@ -138,7 +151,8 @@ export async function POST(
                   title: existingRequest.audiobook.title,
                   author: existingRequest.audiobook.author,
                 },
-                selectedTorrent
+                selectedTorrent,
+                adminSelectedTorrent ? undefined : storedCandidates
               );
             }
 
