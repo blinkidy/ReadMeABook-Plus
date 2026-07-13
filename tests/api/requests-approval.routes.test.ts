@@ -578,6 +578,64 @@ describe('Request Approval Workflow', () => {
       });
     });
 
+    it('POST /api/admin/requests/[id]/approve forwards stored fallback candidates to the download job', async () => {
+      const mockRequest = {
+        json: vi.fn().mockResolvedValue({ action: 'approve' }),
+      };
+
+      const storedTorrent = {
+        guid: 'g-1',
+        title: 'Best Pick',
+        downloadUrl: 'http://dl/1',
+        indexer: 'MyAnonamouse',
+        score: 90,
+        finalScore: 99,
+      };
+      const fallbackCandidates = [
+        {
+          guid: 'g-2',
+          title: 'Close Alternative',
+          downloadUrl: 'http://dl/2',
+          indexer: 'Knaben',
+          score: 89,
+          finalScore: 98,
+        },
+      ];
+
+      prismaMock.request.findUnique.mockResolvedValue({
+        id: 'req-5',
+        status: 'awaiting_approval',
+        type: 'audiobook',
+        selectedTorrent: { ...storedTorrent, fallbackCandidates },
+        userId: 'user-1',
+        audiobook: { id: 'ab-1', title: 'Test Book', author: 'Test Author', audibleAsin: 'ASIN-1' },
+        user: { id: 'user-1', plexUsername: 'testuser' },
+      } as any);
+
+      prismaMock.request.update.mockResolvedValue({
+        id: 'req-5',
+        status: 'downloading',
+        userId: 'user-1',
+        audiobook: { id: 'ab-1', title: 'Test Book', author: 'Test Author', audibleAsin: 'ASIN-1' },
+        user: { id: 'user-1', plexUsername: 'testuser' },
+      } as any);
+
+      const { POST } = await import('@/app/api/admin/requests/[id]/approve/route');
+      const response = await POST(mockRequest as any, { params: Promise.resolve({ id: 'req-5' }) });
+      const payload = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(payload.success).toBe(true);
+      // The stored torrent is passed without the embedded candidates key,
+      // and the candidates ride along as the 4th argument.
+      expect(jobQueueMock.addDownloadJob).toHaveBeenCalledWith(
+        'req-5',
+        { id: 'ab-1', title: 'Test Book', author: 'Test Author' },
+        storedTorrent,
+        fallbackCandidates
+      );
+    });
+
     it('POST /api/admin/requests/[id]/approve with action=deny changes status to denied and does NOT trigger search job', async () => {
       const mockRequest = {
         json: vi.fn().mockResolvedValue({ action: 'deny' }),

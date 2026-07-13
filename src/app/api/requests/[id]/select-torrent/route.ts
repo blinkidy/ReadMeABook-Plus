@@ -120,7 +120,11 @@ export async function POST(
           where: { id },
           data: {
             status: 'awaiting_approval',
-            selectedTorrent: torrent as any, // Store the selected torrent
+            // Store the selected torrent, embedding fallback candidates so the
+            // approve flow can retry a close-scoring alternative on failure.
+            selectedTorrent: (candidates && candidates.length > 0
+              ? { ...torrent, fallbackCandidates: candidates.slice(0, 5) }
+              : torrent) as any,
             updatedAt: new Date(),
           },
           include: {
