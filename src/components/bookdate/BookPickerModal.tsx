@@ -20,6 +20,7 @@ interface LibraryBook {
   title: string;
   author: string;
   coverUrl?: string | null;
+  source?: 'audiobook' | 'bookorbit';
 }
 
 export function BookPickerModal({
@@ -39,17 +40,7 @@ export function BookPickerModal({
   const [displayedCount, setDisplayedCount] = useState(100); // Start with 100 books
   const observerTarget = useRef<HTMLDivElement>(null);
 
-  // Load library books when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      loadLibraryBooks();
-      setLocalSelectedIds(selectedIds); // Reset to initial selection when reopening
-      setDisplayedCount(100); // Reset displayed count
-      setSearchQuery(''); // Reset search
-    }
-  }, [isOpen]);
-
-  const loadLibraryBooks = async () => {
+  const loadLibraryBooks = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -67,13 +58,24 @@ export function BookPickerModal({
 
       const data = await response.json();
       setBooks(data.books || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load library books';
       console.error('Load library books error:', error);
-      setError(error.message || 'Failed to load library books');
+      setError(message);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Load library books when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      loadLibraryBooks();
+      setLocalSelectedIds(selectedIds); // Reset to initial selection when reopening
+      setDisplayedCount(100); // Reset displayed count
+      setSearchQuery(''); // Reset search
+    }
+  }, [isOpen, loadLibraryBooks, selectedIds]);
 
   const toggleBook = (bookId: string) => {
     setLocalSelectedIds(prev => {
@@ -270,6 +272,13 @@ export function BookPickerModal({
                         </div>
                       )}
                     </div>
+
+                    {/* Source Badge */}
+                    {book.source === 'bookorbit' && (
+                      <div className="absolute top-2 left-2 px-2 py-1 bg-emerald-600/90 text-white text-[10px] font-semibold rounded-full shadow">
+                        BookOrbit
+                      </div>
+                    )}
 
                     {/* Selection Overlay */}
                     {isSelected && (
