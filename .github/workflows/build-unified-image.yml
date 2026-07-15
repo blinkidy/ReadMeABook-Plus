@@ -54,7 +54,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
           labels: |
             org.opencontainers.image.title=ReadMeABook Unified
             org.opencontainers.image.description=All-in-one audiobook request and automation system (PostgreSQL + Redis + App)
