@@ -3,12 +3,12 @@
 **Status:** ✅ Implemented | Cache library covers during scans, serve in BookDate
 
 ## Overview
-Caches book covers from Plex/Audiobookshelf during library scans. Stores cached files in `/app/cache/library/` with SHA-256 hashed filenames. Dramatically improves BookDate user experience by showing real covers instead of placeholders.
+Caches book covers from Plex/Audiobookshelf during library scans and extracts embedded cover art from BookOrbit EPUB files. Stores cached files in `/app/cache/library/` with SHA-256 hashed filenames. Dramatically improves BookDate user experience by showing real covers instead of placeholders.
 
 ## Key Details
 
 ### Caching Strategy
-- **When:** During full scans (scan-plex.processor.ts) and recently-added scans (plex-recently-added.processor.ts)
+- **When:** During full/recent audiobook scans and BookOrbit scans. BookOrbit extracts the EPUB package cover; other ebook formats retain the Audible/placeholder fallback.
 - **Where:** `/app/cache/library/` directory
 - **Filename:** SHA-256 hash (first 16 chars) of plexGuid + extension (e.g., `a3f5e9d2c1b4.jpg`)
 - **Smart caching:** Checks if file exists before downloading (subsequent scans are fast)
@@ -60,10 +60,12 @@ Located: `src/lib/services/thumbnail-cache.service.ts`
 
 **Methods:**
 - `cacheLibraryThumbnail(plexGuid, coverUrl, backendBaseUrl, authToken, backendMode)` → Returns cached path or null
+- `cacheEmbeddedLibraryThumbnail(plexGuid, data, extension)` → Stores a validated embedded EPUB image and returns its cached path
 - `cleanupLibraryThumbnails(plexGuidToHashMap)` → Returns deleted count
 
 **Safeguards:**
 - 10s timeout per download
+- Embedded and downloaded images are limited to 5 MB and supported image extensions
 - 5MB max file size
 - Content-type validation (must be image/*)
 - Graceful degradation (logs warning, returns null on failure)

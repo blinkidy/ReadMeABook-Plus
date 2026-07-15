@@ -70,4 +70,11 @@ describe('System routes', () => {
     expect(payload.commit).toBe('abcdef123456');
     expect(payload.buildDate).toBe('2025-01-01');
   });
+
+  it('returns candidate SHA versions without adding a release prefix', async () => {
+    process.env.APP_VERSION = 'sha-ecf2c06';
+    const { GET } = await import('@/app/api/version/route');
+    const payload = await (await GET()).json();
+    expect(payload.version).toBe('sha-ecf2c06');
+  });
 });

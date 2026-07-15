@@ -7,11 +7,12 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { RecommendationCard } from './RecommendationCard';
+import type { BookDateRequestFormat } from './RecommendationCard';
 
 interface CardStackProps {
   recommendations: any[];
   currentIndex: number;
-  onSwipe: (action: 'left' | 'right' | 'up', markedAsKnown?: boolean) => void;
+  onSwipe: (action: 'left' | 'right' | 'up', markedAsKnown?: boolean, requestFormat?: BookDateRequestFormat) => void;
   onSwipeComplete: () => void;
   onShowDetails?: () => void; // Callback to show details modal
 }
@@ -35,7 +36,7 @@ export function CardStack({
   }, [currentIndex]);
 
   const handleSwipeStart = useCallback(
-    (action: 'left' | 'right' | 'up', markedAsKnown?: boolean) => {
+    (action: 'left' | 'right' | 'up', markedAsKnown?: boolean, requestFormat?: BookDateRequestFormat) => {
       // Prevent swipes during animation
       if (isExiting || isAdvancing) {
         return;
@@ -46,7 +47,7 @@ export function CardStack({
       setExitDirection(action);
 
       // Call parent's onSwipe (for API call)
-      onSwipe(action, markedAsKnown);
+      onSwipe(action, markedAsKnown, requestFormat);
 
       // Wait for exit animation to complete (400ms)
       setTimeout(() => {

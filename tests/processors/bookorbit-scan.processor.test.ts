@@ -5,10 +5,14 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs/promises';
+import path from 'path';
 import { createPrismaMock } from '../helpers/prisma';
 
 const prismaMock = createPrismaMock();
 const configMock = vi.hoisted(() => ({ get: vi.fn() }));
+const extractEpubCoverMock = vi.hoisted(() => vi.fn());
+const cacheEmbeddedCoverMock = vi.hoisted(() => vi.fn());
+const bookOrbitRoot = path.resolve('bookorbit-library');
 
 vi.mock('@/lib/db', () => ({
   prisma: prismaMock,
@@ -19,23 +23,30 @@ vi.mock('@/lib/services/config.service', () => ({
 }));
 
 vi.mock('fs/promises');
+vi.mock('@/lib/utils/epub-cover', () => ({ extractEpubCover: extractEpubCoverMock }));
+vi.mock('@/lib/services/thumbnail-cache.service', () => ({
+  getThumbnailCacheService: () => ({ cacheEmbeddedLibraryThumbnail: cacheEmbeddedCoverMock }),
+}));
 
 describe('bookorbit-scan.processor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     configMock.get.mockImplementation(async (key: string) => {
-      if (key === 'ebook_bookorbit_library_path') return '/bookorbit-library';
+      if (key === 'ebook_bookorbit_library_path') return bookOrbitRoot;
       return null;
     });
 
     vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as any);
     prismaMock.plexLibrary.upsert.mockResolvedValue({});
+    prismaMock.plexLibrary.findUnique.mockResolvedValue(null);
     prismaMock.plexLibrary.deleteMany.mockResolvedValue({ count: 0 });
     prismaMock.audibleCache.findUnique.mockResolvedValue(null);
     prismaMock.audibleCache.findFirst.mockResolvedValue(null);
     prismaMock.audibleCache.findMany.mockResolvedValue([]);
     prismaMock.request.findMany.mockResolvedValue([]);
     prismaMock.request.updateMany.mockResolvedValue({ count: 0 });
+    extractEpubCoverMock.mockResolvedValue(null);
+    cacheEmbeddedCoverMock.mockResolvedValue(null);
   });
 
   const mockDirectory = (root: string, files: string[]) => {
@@ -44,13 +55,13 @@ describe('bookorbit-scan.processor', () => {
       const entries = new Map<string, { isDirectory: boolean }>();
 
       for (const file of files) {
-        const relative = file.slice(root.length + 1);
-        const parts = relative.split('/');
-        let current = dirPath === root ? '' : dirPath.slice(root.length + 1);
+        const relative = path.relative(root, file);
+        const parts = relative.split(path.sep);
+        const current = dirPath === root ? '' : path.relative(root, dirPath);
         let remaining = parts;
         if (current) {
-          if (!relative.startsWith(current + '/')) continue;
-          remaining = relative.slice(current.length + 1).split('/');
+          if (!relative.startsWith(current + path.sep)) continue;
+          remaining = path.relative(current, relative).split(path.sep);
         }
         entries.set(remaining[0], { isDirectory: remaining.length > 1 });
       }
@@ -64,8 +75,8 @@ describe('bookorbit-scan.processor', () => {
   };
 
   it('backfills the ASIN from AudibleCache when the BookOrbit file drops the Audible subtitle', async () => {
-    const root = '/bookorbit-library';
-    mockDirectory(root, [`${root}/Books/Jane Author/The Housemaid/The Housemaid.epub`]);
+    const root = bookOrbitRoot;
+    mockDirectory(root, [path.join(root, 'Books', 'Jane Author', 'The Housemaid', 'The Housemaid.epub')]);
 
     prismaMock.audibleCache.findMany.mockResolvedValue([
       { asin: 'B00HOUSEMAID', title: 'The Housemaid: A Novel', author: 'Jane Author' },
@@ -82,8 +93,8 @@ describe('bookorbit-scan.processor', () => {
   });
 
   it('marks a pending ebook request available when the request title carries an Audible subtitle', async () => {
-    const root = '/bookorbit-library';
-    mockDirectory(root, [`${root}/Books/Jane Author/The Housemaid/The Housemaid.epub`]);
+    const root = bookOrbitRoot;
+    mockDirectory(root, [path.join(root, 'Books', 'Jane Author', 'The Housemaid', 'The Housemaid.epub')]);
 
     prismaMock.request.findMany.mockResolvedValue([
       {
@@ -103,5 +114,27 @@ describe('bookorbit-scan.processor', () => {
       }),
     );
     expect(result.markedAvailable).toBe(1);
+  });
+
+  it('stores an embedded EPUB cover in the shared library cache', async () => {
+    const root = bookOrbitRoot;
+    const file = path.join(root, 'Books', 'Jane Author', 'Cover Book', 'Cover Book.epub');
+    mockDirectory(root, [file]);
+    extractEpubCoverMock.mockResolvedValue({ data: Buffer.from('cover'), extension: '.jpg' });
+    cacheEmbeddedCoverMock.mockResolvedValue('/app/cache/library/cover.jpg');
+
+    const { processBookOrbitScan } = await import('@/lib/processors/bookorbit-scan.processor');
+    await processBookOrbitScan();
+
+    expect(cacheEmbeddedCoverMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^bookorbit:\/\//),
+      Buffer.from('cover'),
+      '.jpg',
+    );
+    expect(prismaMock.plexLibrary.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ cachedLibraryCoverPath: '/app/cache/library/cover.jpg' }),
+      }),
+    );
   });
 });

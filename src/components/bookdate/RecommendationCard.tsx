@@ -8,10 +8,13 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { useSwipeable } from 'react-swipeable';
+import { useEbookStatus } from '@/lib/hooks/useRequests';
+
+export type BookDateRequestFormat = 'audiobook' | 'epub' | 'both';
 
 interface RecommendationCardProps {
   recommendation: any;
-  onSwipe: (action: 'left' | 'right' | 'up', markedAsKnown?: boolean) => void;
+  onSwipe: (action: 'left' | 'right' | 'up', markedAsKnown?: boolean, requestFormat?: BookDateRequestFormat) => void;
   onShowDetails?: () => void; // Callback to show details modal
   stackPosition?: number; // 0 = top, 1 = middle, 2 = bottom
   isAnimating?: boolean; // True during exit/advance animations
@@ -30,6 +33,20 @@ export function RecommendationCard({
   const [coverError, setCoverError] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [requestFormat, setRequestFormat] = useState<BookDateRequestFormat>('audiobook');
+  const asin = recommendation.asin || recommendation.audnexusAsin || null;
+  const { ebookStatus, isLoading: isLoadingFormats } = useEbookStatus(showToast ? asin : null);
+  const canRequestAudiobook = !ebookStatus?.audiobookAvailable && !ebookStatus?.hasActiveAudiobookRequest;
+  const canRequestEpub = !!ebookStatus?.ebookSourcesEnabled && !ebookStatus?.ebookAvailable && !ebookStatus?.hasActiveEbookRequest;
+
+  const effectiveRequestFormat =
+    requestFormat === 'both' && canRequestAudiobook && canRequestEpub
+      ? 'both'
+      : requestFormat === 'epub' && canRequestEpub
+        ? 'epub'
+        : canRequestAudiobook
+          ? 'audiobook'
+          : 'epub';
 
   const handleSwipeRight = () => {
     setShowToast(true);
@@ -38,7 +55,7 @@ export function RecommendationCard({
   const handleToastAction = (action: 'request' | 'known' | 'cancel') => {
     setShowToast(false);
     if (action === 'request') {
-      onSwipe('right', false);
+      onSwipe('right', false, effectiveRequestFormat);
     } else if (action === 'known') {
       onSwipe('right', true);
     }
@@ -340,9 +357,22 @@ export function RecommendationCard({
               Request "{recommendation.title}"?
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Do you want to request this audiobook, or have you already read/listened to and enjoyed it?
+              Choose which format to request, or mark the book as already read/listened to and enjoyed.
             </p>
-            <div className="flex gap-3">
+            {!isLoadingFormats && (canRequestAudiobook || canRequestEpub) && (
+              <div className={`grid gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-700 mb-5 ${canRequestAudiobook && canRequestEpub ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                {canRequestAudiobook && (
+                  <button type="button" onClick={() => setRequestFormat('audiobook')} className={`rounded-lg px-3 py-2 text-sm font-semibold ${effectiveRequestFormat === 'audiobook' ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-600 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}`}>Audiobook</button>
+                )}
+                {canRequestEpub && (
+                  <button type="button" onClick={() => setRequestFormat('epub')} className={`rounded-lg px-3 py-2 text-sm font-semibold ${effectiveRequestFormat === 'epub' ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-600 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}`}>EPUB</button>
+                )}
+                {canRequestAudiobook && canRequestEpub && (
+                  <button type="button" onClick={() => setRequestFormat('both')} className={`rounded-lg px-3 py-2 text-sm font-semibold ${effectiveRequestFormat === 'both' ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-600 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}`}>Both</button>
+                )}
+              </div>
+            )}
+            <div className="flex flex-wrap sm:flex-nowrap gap-3">
               <button
                 onClick={() => handleToastAction('cancel')}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -357,9 +387,10 @@ export function RecommendationCard({
               </button>
               <button
                 onClick={() => handleToastAction('request')}
+                disabled={isLoadingFormats || (!canRequestAudiobook && !canRequestEpub)}
                 className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
               >
-                Request
+                {isLoadingFormats ? 'Checking...' : `Request ${effectiveRequestFormat === 'both' ? 'Both' : effectiveRequestFormat === 'epub' ? 'EPUB' : 'Audiobook'}`}
               </button>
             </div>
           </div>

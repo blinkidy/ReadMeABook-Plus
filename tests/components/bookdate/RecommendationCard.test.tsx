@@ -24,6 +24,10 @@ vi.mock('react-swipeable', () => ({
   },
 }));
 
+vi.mock('@/lib/hooks/useRequests', () => ({
+  useEbookStatus: () => ({ ebookStatus: null, isLoading: false }),
+}));
+
 const recommendation = {
   title: 'Sample Book',
   author: 'Sample Author',
@@ -53,7 +57,7 @@ describe('RecommendationCard', () => {
     const toastRequestButtons = screen.getAllByRole('button', { name: /Request/ });
     fireEvent.click(toastRequestButtons[toastRequestButtons.length - 1]);
 
-    expect(onSwipe).toHaveBeenCalledWith('right', false);
+    expect(onSwipe).toHaveBeenCalledWith('right', false, 'audiobook');
   });
 
   it('marks a recommendation as liked from the toast', async () => {

@@ -12,6 +12,7 @@ import { CardStack } from '@/components/bookdate/CardStack';
 import { LoadingScreen } from '@/components/bookdate/LoadingScreen';
 import { SettingsWidget } from '@/components/bookdate/SettingsWidget';
 import { AudiobookDetailsModal } from '@/components/audiobooks/AudiobookDetailsModal';
+import type { BookDateRequestFormat } from '@/components/bookdate/RecommendationCard';
 
 export default function BookDatePage() {
   const [recommendations, setRecommendations] = useState<any[]>([]);
@@ -121,14 +122,15 @@ export default function BookDatePage() {
 
   const handleSwipe = async (
     action: 'left' | 'right' | 'up',
-    markedAsKnown = false
+    markedAsKnown = false,
+    requestFormat: BookDateRequestFormat = 'audiobook',
   ) => {
     const recommendation = recommendations[currentIndex];
 
     try {
       const accessToken = localStorage.getItem('accessToken');
 
-      await fetch('/api/bookdate/swipe', {
+      const response = await fetch('/api/bookdate/swipe', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -138,8 +140,13 @@ export default function BookDatePage() {
           recommendationId: recommendation.id,
           action,
           markedAsKnown,
+          requestFormat,
         }),
       });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to record swipe');
+      }
 
       // Store last swipe for undo functionality
       if (action !== 'right') {
@@ -245,6 +252,28 @@ export default function BookDatePage() {
 
   const handleCloseDetails = () => {
     setShowDetailsModal(false);
+  };
+
+  const handleDetailsRequestSuccess = async (requestFormat: BookDateRequestFormat = 'audiobook') => {
+    const recommendation = recommendations[currentIndex];
+    const accessToken = localStorage.getItem('accessToken');
+    const response = await fetch('/api/bookdate/swipe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        recommendationId: recommendation.id,
+        action: 'right',
+        requestFormat,
+        requestAlreadyCreated: true,
+      }),
+    });
+    if (response.ok) {
+      setShowDetailsModal(false);
+      await loadRecommendations();
+    }
   };
 
   // Loading state (checking onboarding or loading recommendations)
@@ -353,7 +382,7 @@ export default function BookDatePage() {
         {/* Settings button - positioned to avoid card overlap */}
         <button
           onClick={() => setShowSettings(true)}
-          className="fixed bottom-4 right-4 md:top-20 md:bottom-auto p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-full md:rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg transition-all z-10"
+          className="fixed bottom-4 right-4 md:top-32 md:bottom-auto p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-full md:rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg transition-all z-10"
           aria-label="Open settings"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -409,12 +438,11 @@ export default function BookDatePage() {
             asin={asin}
             isOpen={showDetailsModal}
             onClose={handleCloseDetails}
-            onRequestSuccess={loadRecommendations}
+            onRequestSuccess={handleDetailsRequestSuccess}
             isRequested={currentRec.isRequested}
             requestStatus={currentRec.requestStatus}
             isAvailable={currentRec.isAvailable}
             requestedByUsername={currentRec.requestedByUsername}
-            hideRequestActions
             aiReason={currentRec.aiReason}
           />
         ) : null;

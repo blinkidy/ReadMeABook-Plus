@@ -22,6 +22,14 @@ function compareVersions(current: string, latest: string): number {
   return 0;
 }
 
+function isReleaseVersion(version: string | null): version is string {
+  return !!version && /^\d+\.\d+\.\d+(?:[-+].+)?$/.test(version);
+}
+
+function displayVersion(version: string): string {
+  return isReleaseVersion(version) ? `v${version}` : version;
+}
+
 export function VersionBadge() {
   const [version, setVersion] = useState<string | null>(null);
   const [rawVersion, setRawVersion] = useState<string | null>(null);
@@ -34,7 +42,7 @@ export function VersionBadge() {
     const buildTimeVersion = process.env.NEXT_PUBLIC_APP_VERSION;
 
     if (buildTimeVersion && buildTimeVersion !== 'unknown') {
-      setVersion(`v${buildTimeVersion}`);
+      setVersion(displayVersion(buildTimeVersion));
       setRawVersion(buildTimeVersion);
       // Also get commit for tooltip if available
       const buildTimeCommit = process.env.NEXT_PUBLIC_GIT_COMMIT;
@@ -63,7 +71,7 @@ export function VersionBadge() {
   }, []);
 
   const checkForUpdates = useCallback(() => {
-    if (!rawVersion || rawVersion === 'unknown') return;
+    if (!isReleaseVersion(rawVersion)) return;
 
     fetch(REMOTE_PACKAGE_URL)
       .then((res) => res.json())
@@ -80,7 +88,7 @@ export function VersionBadge() {
 
   // Check for updates on mount and periodically (every 6 hours)
   useEffect(() => {
-    if (!rawVersion || rawVersion === 'unknown') return;
+    if (!isReleaseVersion(rawVersion)) return;
 
     checkForUpdates();
     const interval = setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL);
@@ -91,9 +99,11 @@ export function VersionBadge() {
     return null;
   }
 
-  const releaseUrl = rawVersion && rawVersion !== 'unknown'
+  const releaseUrl = isReleaseVersion(rawVersion)
     ? `https://github.com/${GITHUB_REPO}/releases/tag/v${rawVersion}`
-    : `https://github.com/${GITHUB_REPO}/releases`;
+    : commit
+      ? `https://github.com/${GITHUB_REPO}/commit/${commit}`
+      : `https://github.com/${GITHUB_REPO}`;
 
   const tooltipText = updateAvailable && latestVersion
     ? `${version}${commit ? ` (${commit})` : ''} — Update available: v${latestVersion}`

@@ -14,6 +14,8 @@ const audibleServiceMock = vi.hoisted(() => ({
 }));
 const enrichMock = vi.hoisted(() => vi.fn());
 const currentUserMock = vi.hoisted(() => vi.fn());
+const configGetMock = vi.hoisted(() => vi.fn());
+const hardcoverSearchMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/db', () => ({
   prisma: prismaMock,
@@ -39,11 +41,20 @@ vi.mock('@/lib/middleware/auth', () => ({
   getCurrentUserAsync: currentUserMock,
 }));
 
+vi.mock('@/lib/services/config.service', () => ({
+  getConfigService: () => ({ get: configGetMock }),
+}));
+
+vi.mock('@/lib/services/hardcover-api.service', () => ({
+  searchHardcoverBooks: hardcoverSearchMock,
+}));
+
 describe('Audiobooks browse routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     enrichMock.mockResolvedValue([]);
     currentUserMock.mockReturnValue(null);
+    configGetMock.mockResolvedValue(null);
   });
 
   it('searches Audible and enriches results', async () => {
@@ -193,6 +204,37 @@ describe('Audiobooks browse routes', () => {
 
     expect(payload.success).toBe(true);
     expect(payload.audiobook.asin).toBe('ASIN123456');
+  });
+
+  it('enriches audiobook details with a matching Hardcover book', async () => {
+    audibleServiceMock.getAudiobookDetails.mockResolvedValue({
+      asin: 'ASIN123456',
+      title: 'Detail Book',
+      author: 'Detail Author',
+    });
+    configGetMock.mockResolvedValue('hardcover-token');
+    hardcoverSearchMock.mockResolvedValue({
+      books: [{
+        hardcoverId: '123',
+        title: 'Detail Book',
+        author: 'Detail Author',
+        isbn: '9780000000001',
+        pageCount: 336,
+        slug: 'detail-book',
+      }],
+      found: 1,
+    });
+    const { GET } = await import('@/app/api/audiobooks/[asin]/route');
+
+    const payload = await (await GET({} as any, { params: Promise.resolve({ asin: 'ASIN123456' }) })).json();
+
+    expect(payload.hardcover).toEqual({
+      id: '123',
+      isbn: '9780000000001',
+      pageCount: 336,
+      slug: 'detail-book',
+      url: 'https://hardcover.app/books/detail-book',
+    });
   });
 
   it('returns 400 when ASIN is invalid', async () => {

@@ -41,6 +41,14 @@ export interface Audiobook {
   publisherName?: string;
 }
 
+export interface HardcoverBookMetadata {
+  id: string;
+  isbn?: string;
+  pageCount?: number;
+  slug?: string;
+  url: string;
+}
+
 export function useAudiobooks(
   type: 'popular' | 'new-releases',
   limit: number = 20,
@@ -140,6 +148,7 @@ export function useAudiobookDetails(asin: string | null) {
 
   return {
     audiobook: data?.audiobook || null,
+    hardcover: (data?.hardcover || null) as HardcoverBookMetadata | null,
     audibleBaseUrl: data?.audibleBaseUrl || 'https://www.audible.com',
     isLoading,
     error,
