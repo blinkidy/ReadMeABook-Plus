@@ -117,6 +117,11 @@ describe('BookDate helpers', () => {
         rating: undefined,
       },
     ]);
+    expect(prismaMock.plexLibrary.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { plexLibraryId: { in: ['abs-lib-1', 'bookorbit'] } },
+      })
+    );
   });
 
   it('returns rated books for local admin Plex users', async () => {
@@ -150,6 +155,11 @@ describe('BookDate helpers', () => {
     expect(result).toHaveLength(1);
     expect(result[0].title).toBe('Rated');
     expect(result[0].rating).toBe(9);
+    expect(prismaMock.plexLibrary.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { plexLibraryId: 'plex-lib', userRating: { not: null } },
+      })
+    );
   });
 
   it('returns rated books for Plex users with personal ratings', async () => {
@@ -228,6 +238,11 @@ describe('BookDate helpers', () => {
         rating: undefined,
       },
     ]);
+    expect(prismaMock.plexLibrary.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { plexLibraryId: { in: ['plex-lib', 'bookorbit'] } },
+      })
+    );
   });
 
   it('returns empty list when Plex library id is missing', async () => {

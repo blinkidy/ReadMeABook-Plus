@@ -11,6 +11,8 @@ import { RMABLogger } from '@/lib/utils/logger';
 
 const logger = RMABLogger.create('API.BookDate.Library');
 
+const BOOKORBIT_LIBRARY_ID = 'bookorbit';
+
 /**
  * GET /api/bookdate/library
  * Get user's full library for book picker modal
@@ -46,21 +48,24 @@ async function getLibraryBooks(req: AuthenticatedRequest) {
       libraryId = plexConfig.libraryId;
     }
 
-    // Fetch ALL books from library (no limit - client handles pagination/infinite scroll)
+    const libraryIds = [libraryId, BOOKORBIT_LIBRARY_ID];
+
+    // Fetch ALL books from the audiobook library and BookOrbit ebook library (no limit - client handles pagination/infinite scroll)
     // Join with AudibleCache to get cached cover images
     const books = await prisma.plexLibrary.findMany({
-      where: { plexLibraryId: libraryId },
+      where: { plexLibraryId: { in: libraryIds } },
       select: {
         id: true,
         title: true,
         author: true,
         asin: true, // For joining with AudibleCache
         cachedLibraryCoverPath: true, // For library cached covers
+        plexLibraryId: true,
       },
       orderBy: { addedAt: 'desc' },
     });
 
-    logger.info(`Fetched ${books.length} books from library for user ${userId}`);
+    logger.info(`Fetched ${books.length} books from audiobook and BookOrbit libraries for user ${userId}`);
 
     // Get ASINs for books that have them
     const asins = books.map(b => b.asin).filter((asin): asin is string => !!asin);
@@ -107,14 +112,16 @@ async function getLibraryBooks(req: AuthenticatedRequest) {
           title: book.title,
           author: book.author,
           coverUrl,
+          source: book.plexLibraryId === BOOKORBIT_LIBRARY_ID ? 'bookorbit' : 'audiobook',
         };
       }),
     });
 
-  } catch (error: any) {
-    logger.error('Get library books error', { error: error instanceof Error ? error.message : String(error) });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch library books';
+    logger.error('Get library books error', { error: message });
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch library books' },
+      { error: message },
       { status: 500 }
     );
   }

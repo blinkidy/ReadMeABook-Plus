@@ -3,10 +3,12 @@
  * Documentation: documentation/features/bookdate.md
  */
 
+import type { NextRequest } from 'next/server';
+import type { AuthenticatedRequest } from '@/lib/middleware/auth';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPrismaMock } from '../helpers/prisma';
 
-let authRequest: any;
+let authRequest: AuthenticatedRequest;
 
 const prismaMock = createPrismaMock();
 const requireAuthMock = vi.hoisted(() => vi.fn());
@@ -31,8 +33,8 @@ vi.mock('@/lib/services/config.service', () => ({
 describe('BookDate library route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    authRequest = { user: { id: 'user-1' } };
-    requireAuthMock.mockImplementation((_req: any, handler: any) => handler(authRequest));
+    authRequest = { user: { id: 'user-1' } } as AuthenticatedRequest;
+    requireAuthMock.mockImplementation((_req: NextRequest, handler: (req: AuthenticatedRequest) => unknown) => handler(authRequest));
   });
 
   it('returns 400 when Audiobookshelf library ID is missing', async () => {
@@ -40,7 +42,7 @@ describe('BookDate library route', () => {
     configMock.get.mockResolvedValue(null);
 
     const { GET } = await import('@/app/api/bookdate/library/route');
-    const response = await GET({} as any);
+    const response = await GET({} as NextRequest);
     const payload = await response.json();
 
     expect(response.status).toBe(400);
@@ -52,7 +54,7 @@ describe('BookDate library route', () => {
     configMock.getPlexConfig.mockResolvedValue({ libraryId: null });
 
     const { GET } = await import('@/app/api/bookdate/library/route');
-    const response = await GET({} as any);
+    const response = await GET({} as NextRequest);
     const payload = await response.json();
 
     expect(response.status).toBe(400);
@@ -70,6 +72,7 @@ describe('BookDate library route', () => {
         author: 'Author A',
         asin: 'ASIN1',
         cachedLibraryCoverPath: '/cache/library/cover1.jpg',
+        plexLibraryId: 'lib-1',
       },
       {
         id: 'book-2',
@@ -77,6 +80,7 @@ describe('BookDate library route', () => {
         author: 'Author B',
         asin: 'ASIN2',
         cachedLibraryCoverPath: null,
+        plexLibraryId: 'bookorbit',
       },
       {
         id: 'book-3',
@@ -84,6 +88,7 @@ describe('BookDate library route', () => {
         author: 'Author C',
         asin: null,
         cachedLibraryCoverPath: null,
+        plexLibraryId: 'lib-1',
       },
     ]);
 
@@ -93,7 +98,7 @@ describe('BookDate library route', () => {
     ]);
 
     const { GET } = await import('@/app/api/bookdate/library/route');
-    const response = await GET({} as any);
+    const response = await GET({} as NextRequest);
     const payload = await response.json();
 
     expect(response.status).toBe(200);
@@ -103,18 +108,21 @@ describe('BookDate library route', () => {
         title: 'Cached Cover',
         author: 'Author A',
         coverUrl: '/api/cache/library/cover1.jpg',
+        source: 'audiobook',
       },
       {
         id: 'book-2',
         title: 'Audible Cover',
         author: 'Author B',
         coverUrl: 'http://audible/cover2.jpg',
+        source: 'bookorbit',
       },
       {
         id: 'book-3',
         title: 'No Cover',
         author: 'Author C',
         coverUrl: null,
+        source: 'audiobook',
       },
     ]);
   });
@@ -125,7 +133,7 @@ describe('BookDate library route', () => {
     prismaMock.plexLibrary.findMany.mockRejectedValue(new Error('db down'));
 
     const { GET } = await import('@/app/api/bookdate/library/route');
-    const response = await GET({} as any);
+    const response = await GET({} as NextRequest);
     const payload = await response.json();
 
     expect(response.status).toBe(500);
