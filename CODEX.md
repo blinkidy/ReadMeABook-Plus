@@ -125,6 +125,8 @@
   - Stops before publishing/release.
 - `.github/workflows/build-unified-image.yml`
   - Remains the manual/tag release workflow that publishes to GHCR.
+  - Manual dispatch publishes commit-specific `sha-*` candidate tags without moving `latest`.
+  - A successful `v*` tag build publishes semantic-version tags and promotes that release to `latest`.
   - Discord notifications are disabled/removed.
   - Manual dispatch defaults to `linux/amd64` for faster publish builds.
   - Use `linux/amd64,linux/arm64` only when a multi-arch image is actually needed; ARM64 builds are much slower under GitHub runner emulation.
