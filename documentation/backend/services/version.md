@@ -1,23 +1,27 @@
 # Version Display
 
-**Status:** ✅ Implemented | Build-time version injection + GitHub release check
+**Status:** Implemented | Release and candidate build identity
 
 ## Overview
 Shows the running app version in the UI (`VersionBadge`) and flags when a newer release is available on the fork's GitHub repo.
 
 ## Key Details
-- **Source of truth:** `package.json` `version` field (semver, no `v` prefix)
-- **Build args:** `APP_VERSION`, `GIT_COMMIT`, `BUILD_DATE` — set in `dockerfile.unified`, populated by CI (`build-unified-image.yml`, `pre-release-checks.yml`) from `package.json` + `git rev-parse --short=7 HEAD` + current UTC time
-- **Client access:** baked in as `NEXT_PUBLIC_APP_VERSION` / `NEXT_PUBLIC_GIT_COMMIT` (read directly, no API call); falls back to `GET /api/version` if unset (e.g. local dev)
-- **Repo used for release links/update checks:** `GITHUB_REPO` constant in `src/components/ui/VersionBadge.tsx` — hardcoded to this fork (`blinkidy/ReadMeABook-Plus`), not the upstream project
-- **Update check:** fetches `package.json` from the fork's `main` branch every 6h, compares semver; shows an amber pulse + the newer version if available
-- **Click target:** `https://github.com/{GITHUB_REPO}/releases/tag/v{version}` — resolves because a GitHub Release is created for every `v*` tag (see below)
+- **Release identity:** release builds use the `package.json` semver and display `v1.1.1`.
+- **Candidate identity:** manually published test images use the immutable seven-character commit identity and display `sha-abc1234`.
+- **Build args:** `APP_VERSION`, `GIT_COMMIT`, and `BUILD_DATE` are injected by the Docker workflows.
+- **Client access:** `NEXT_PUBLIC_APP_VERSION` and `NEXT_PUBLIC_GIT_COMMIT`; `GET /api/version` is the local-development fallback.
+- **Release checks:** only semver releases compare against `main/package.json` every six hours. Candidate builds skip semver checks.
+- **Links:** release badges link to their GitHub Release; candidate badges link to the exact commit.
 
 ## Cutting a Release
-- **`.github/workflows/cut-release.yml`** — manual-only (`workflow_dispatch`), run from `main` in the Actions tab. Does everything in one step: runs the full test suite, tags `v{package.json version}`, builds + pushes the multi-arch Docker image to GHCR, and creates the GitHub Release (auto-generated notes). Fails fast if run from a non-`main` branch, if the tag already exists, or if an explicit `version` input doesn't match `package.json`.
-- **Fallback path:** `.github/workflows/build-unified-image.yml` and `.github/workflows/release.yml` still trigger independently on any `v*` tag pushed directly (e.g. from a local `git push --tags`) — kept for manual/advanced use, but `cut-release.yml` is the normal path since it bundles tag + build + release into a single click. (A tag created *inside* a workflow via the default `GITHUB_TOKEN` does not cascade-trigger other tag-push workflows — that's why `cut-release.yml` performs the build/release steps itself rather than relying on `build-unified-image.yml`/`release.yml` to pick up its tag push.)
+`.github/workflows/cut-release.yml` is the normal manual release path from `main`. It runs tests, tags `v{package.json version}`, builds and publishes the multi-arch Docker image (including `latest`), and creates the GitHub Release. Directly pushed `v*` tags remain supported by the fallback build and release workflows.
+
+Manual runs of `.github/workflows/build-unified-image.yml` publish testable SHA tags without moving `latest`. After validation, cut a release to publish the version tags and update `latest`.
 
 ## API/Interfaces
-- `GET /api/version` → `{ version: "v1.0.0", fullVersion: "1.0.0", commit: "abc1234", buildDate: "..." }`
+- Release: `{ version: "v1.1.1", fullVersion: "1.1.1", commit: "abc1234", buildDate: "..." }`
+- Candidate: `{ version: "sha-abc1234", fullVersion: "sha-abc1234", commit: "abc1234", buildDate: "..." }`
 
-## Related: [ui/VersionBadge.tsx](../../../src/components/ui/VersionBadge.tsx), [deployment/docker.md](../../deployment/docker.md)
+## Related
+- `src/components/ui/VersionBadge.tsx`
+- `documentation/deployment/docker.md`

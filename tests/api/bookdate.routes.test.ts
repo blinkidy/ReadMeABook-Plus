@@ -626,7 +626,9 @@ describe('BookDate routes', () => {
       audibleAsin: 'ASIN-YEAR',
     } as any);
     prismaMock.audiobook.update.mockResolvedValueOnce({ id: 'ab-year' } as any);
-    prismaMock.request.findFirst.mockResolvedValueOnce({ id: 'req-existing' } as any);
+    prismaMock.request.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'req-existing' } as any);
 
     const { POST } = await import('@/app/api/bookdate/swipe/route');
     const response = await POST({} as any);
@@ -678,7 +680,9 @@ describe('BookDate routes', () => {
       'req-1',
       'Title',
       'Author',
-      'testuser'
+      'testuser',
+      undefined,
+      'audiobook'
     );
     expect(jobQueueMock.addSearchJob).toHaveBeenCalled();
   });
@@ -723,7 +727,9 @@ describe('BookDate routes', () => {
       'req-2',
       'Title 2',
       'Author 2',
-      'testuser2'
+      'testuser2',
+      undefined,
+      'audiobook'
     );
     expect(jobQueueMock.addSearchJob).not.toHaveBeenCalled();
   });
@@ -768,7 +774,9 @@ describe('BookDate routes', () => {
       'req-3',
       'Title 3',
       'Author 3',
-      'testuser3'
+      'testuser3',
+      undefined,
+      'audiobook'
     );
     expect(jobQueueMock.addSearchJob).toHaveBeenCalled();
   });
@@ -817,7 +825,9 @@ describe('BookDate routes', () => {
       'req-4',
       'Title 4',
       'Author 4',
-      'testuser4'
+      'testuser4',
+      undefined,
+      'audiobook'
     );
     expect(jobQueueMock.addSearchJob).not.toHaveBeenCalled();
   });

@@ -55,6 +55,22 @@ describe('VersionBadge', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/version');
   });
 
+  it('renders a candidate SHA without a release prefix and links to its commit', async () => {
+    process.env.NEXT_PUBLIC_APP_VERSION = 'sha-ecf2c06';
+    process.env.NEXT_PUBLIC_GIT_COMMIT = 'ecf2c06';
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<VersionBadge />);
+
+    const badge = await screen.findByText('sha-ecf2c06');
+    expect(badge.closest('a')).toHaveAttribute(
+      'href',
+      'https://github.com/blinkidy/ReadMeABook-Plus/commit/ecf2c06',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('shows dev version when API fetch fails', async () => {
     process.env.NEXT_PUBLIC_APP_VERSION = 'unknown';
     const fetchMock = vi.fn().mockRejectedValue(new Error('down'));

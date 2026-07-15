@@ -10,6 +10,8 @@ import { prisma } from '../db';
 import { getConfigService } from '../services/config.service';
 import { cleanIndexerSearchTitle } from '../utils/search-title';
 import { RMABLogger } from '../utils/logger';
+import { extractEpubCover } from '../utils/epub-cover';
+import { getThumbnailCacheService } from '../services/thumbnail-cache.service';
 
 const logger = RMABLogger.create('BookOrbitScan');
 
@@ -302,6 +304,23 @@ export async function processBookOrbitScan(payload: BookOrbitScanPayload = {}): 
     const guid = stableGuid(file);
     seenGuids.add(guid);
 
+    const existing = await prisma.plexLibrary.findUnique({
+      where: { plexGuid: guid },
+      select: { cachedLibraryCoverPath: true },
+    });
+    let cachedLibraryCoverPath = existing?.cachedLibraryCoverPath || null;
+    if (!cachedLibraryCoverPath && path.extname(file).toLowerCase() === '.epub') {
+      try {
+        const cover = await extractEpubCover(file);
+        if (cover) {
+          cachedLibraryCoverPath = await getThumbnailCacheService()
+            .cacheEmbeddedLibraryThumbnail(guid, cover.data, cover.extension);
+        }
+      } catch (error) {
+        await jobLogger.warn(`Could not extract EPUB cover for ${file}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
     await prisma.plexLibrary.upsert({
       where: { plexGuid: guid },
       create: {
@@ -311,6 +330,7 @@ export async function processBookOrbitScan(payload: BookOrbitScanPayload = {}): 
         asin: book.asin || null,
         filePath: file,
         plexLibraryId: BOOKORBIT_LIBRARY_ID,
+        cachedLibraryCoverPath,
         addedAt: new Date(),
       },
       update: {
@@ -319,6 +339,7 @@ export async function processBookOrbitScan(payload: BookOrbitScanPayload = {}): 
         asin: book.asin || null,
         filePath: file,
         plexLibraryId: BOOKORBIT_LIBRARY_ID,
+        cachedLibraryCoverPath,
         lastScannedAt: new Date(),
       },
     });

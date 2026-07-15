@@ -79,6 +79,36 @@ export class ThumbnailCacheService {
     return `${hash}${ext}`;
   }
 
+  /** Cache an image already embedded in a local library file (for example, an EPUB cover). */
+  async cacheEmbeddedLibraryThumbnail(
+    plexGuid: string,
+    data: Buffer,
+    extension: string,
+  ): Promise<string | null> {
+    const normalizedExtension = extension.toLowerCase();
+    if (!plexGuid || data.length === 0 || data.length > MAX_FILE_SIZE ||
+        !['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(normalizedExtension)) {
+      return null;
+    }
+
+    try {
+      await this.ensureLibraryCacheDir();
+      const hash = crypto.createHash('sha256').update(plexGuid).digest('hex').substring(0, 16);
+      const filePath = path.join(LIBRARY_CACHE_DIR, `${hash}${normalizedExtension}`);
+      try {
+        await fs.access(filePath);
+        return filePath;
+      } catch {
+        await fs.writeFile(filePath, data);
+      }
+      logger.info(`Cached embedded library thumbnail for ${plexGuid}: ${filePath}`);
+      return filePath;
+    } catch (error) {
+      logger.warn(`Failed to cache embedded library thumbnail for ${plexGuid}: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+  }
+
   /**
    * Download and cache a thumbnail from a URL
    * @param asin - Audible ASIN

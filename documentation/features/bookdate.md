@@ -23,7 +23,7 @@ Personalized audiobook discovery using OpenAI/Claude APIs. Admin configures AI p
 - **Cache:** All unswiped recommendations persisted per user, shown on return
 - **Actions:**
   - Left swipe: Reject (can undo) - requires 150px swipe distance
-  - Right swipe: Request (shows confirmation toast: "Request" or "Mark as Known", triggers search job)
+  - Right swipe: Request (choose Audiobook, EPUB, or Both; or "Mark as Known")
   - Up swipe: Dismiss (can undo) - requires 150px swipe distance
 - **Enable/Disable:** Admin global toggle to enable/disable feature for all users
 - **Visibility:** Tab shown to any authenticated user when admin has configured and enabled BookDate
@@ -89,7 +89,7 @@ Personalized audiobook discovery using OpenAI/Claude APIs. Admin configures AI p
 
 **Recommendations:**
 - GET `/api/bookdate/recommendations` - Return user's cached unswiped recommendations (All authenticated)
-- POST `/api/bookdate/swipe` - Record user's swipe, create request + trigger search job if right+confirm (All authenticated)
+- POST `/api/bookdate/swipe` - Record a swipe and create `audiobook`, `epub`, or `both` through the shared request pipeline when right+confirm (All authenticated)
 - POST `/api/bookdate/undo` - Undo last swipe (left/up only) (All authenticated)
 - POST `/api/bookdate/generate` - Force generate new batch (All authenticated)
 
@@ -165,9 +165,11 @@ Personalized audiobook discovery using OpenAI/Claude APIs. Admin configures AI p
 
 **Right Swipe Flow:**
 1. User swipes right (150px minimum) → Shows confirmation toast
-2. User selects "Request" → Creates `Audiobook` + `Request` records + triggers search job
+2. User selects Audiobook, EPUB, or Both → Creates the selected request(s) through `request-creator.service.ts`
 3. User selects "Mark as Known" → Records swipe only (no request)
-4. Request appears in `/requests` page, search job begins automatically (same as regular requests)
+4. Request appears in `/requests`; approval, duplicate checks, notifications, release gating, and search behavior match regular requests
+
+The card's details modal exposes the same format selector. After a successful request it records the recommendation as swiped without creating a duplicate request. The desktop settings control is positioned below the two-row sticky header.
 
 ## Setup Wizard Integration
 

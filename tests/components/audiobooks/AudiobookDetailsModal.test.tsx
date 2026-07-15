@@ -102,6 +102,32 @@ describe('AudiobookDetailsModal', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('shows Hardcover page count, ISBN, and source link when enriched', async () => {
+    useAudiobookDetailsMock.mockReturnValue({
+      audiobook: audiobookDetails,
+      hardcover: {
+        id: '123',
+        pageCount: 336,
+        isbn: '9780000000001',
+        url: 'https://hardcover.app/books/detail-book',
+      },
+      audibleBaseUrl: 'https://www.audible.com',
+      isLoading: false,
+      error: null,
+    });
+    const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
+
+    render(<AudiobookDetailsModal asin="ASIN123" isOpen onClose={vi.fn()} />);
+    await act(async () => {});
+
+    expect(screen.getByText('336 pages')).toBeInTheDocument();
+    expect(screen.getByText('9780000000001')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Hardcover/i })).toHaveAttribute(
+      'href',
+      'https://hardcover.app/books/detail-book',
+    );
+  });
+
   it('creates requests and auto-closes after success', async () => {
     vi.useFakeTimers();
     createRequestMock.mockResolvedValueOnce(undefined);

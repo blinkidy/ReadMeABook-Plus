@@ -29,7 +29,7 @@ interface AudiobookDetailsModalProps {
   asin: string;
   isOpen: boolean;
   onClose: () => void;
-  onRequestSuccess?: () => void;
+  onRequestSuccess?: (format?: RequestFormat) => void;
   onStatusChange?: (newStatus: string) => void;
   onIgnoreChange?: (isIgnored: boolean) => void;
   isRequested?: boolean;
@@ -89,7 +89,7 @@ export function AudiobookDetailsModal({
 }: AudiobookDetailsModalProps) {
   const { user } = useAuth();
   const { squareCovers } = usePreferences();
-  const { audiobook, audibleBaseUrl, isLoading, error } = useAudiobookDetails(isOpen ? asin : null);
+  const { audiobook, hardcover, audibleBaseUrl, isLoading, error } = useAudiobookDetails(isOpen ? asin : null);
   const { createRequest, isLoading: isRequesting } = useCreateRequest();
   const { ebookStatus, revalidate: revalidateEbookStatus } = useEbookStatus(isOpen ? asin : null);
   const { downloadAvailable, requestId } = useDownloadStatus(isOpen ? asin : null);
@@ -201,7 +201,7 @@ export function AudiobookDetailsModal({
       }
       showNotification(`${requestFormat === 'both' ? 'Audiobook and EPUB' : requestFormat === 'epub' ? 'EPUB' : 'Audiobook'} request created!`);
       setTimeout(onClose, 1500);
-      onRequestSuccess?.();
+      onRequestSuccess?.(requestFormat);
     } catch (err) {
       showNotification(err instanceof Error ? err.message : 'Failed to create request', 'error');
     }
@@ -534,6 +534,9 @@ export function AudiobookDetailsModal({
                         {formatDuration(audiobook.durationMinutes)}
                       </span>
                     )}
+                    {hardcover?.pageCount && (
+                      <span>{hardcover.pageCount.toLocaleString()} pages</span>
+                    )}
                     {audiobook.releaseDate && (
                       <span>{formatDate(audiobook.releaseDate)}</span>
                     )}
@@ -618,9 +621,17 @@ export function AudiobookDetailsModal({
                     </button>
                   </div>
 
+                  {hardcover?.isbn && (
+                    <div>
+                      <p className="text-gray-500 dark:text-gray-400">ISBN</p>
+                      <p className="font-mono text-gray-900 dark:text-gray-100">{hardcover.isbn}</p>
+                    </div>
+                  )}
+
                   {/* Audible Link */}
                   <div>
-                    <p className="text-gray-500 dark:text-gray-400">Source</p>
+                    <p className="text-gray-500 dark:text-gray-400">Sources</p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
                     <a
                       href={`${audibleBaseUrl}/pd/${asin}`}
                       target="_blank"
@@ -632,6 +643,20 @@ export function AudiobookDetailsModal({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
                     </a>
+                    {hardcover?.url && (
+                      <a
+                        href={hardcover.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        Hardcover
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    )}
+                    </div>
                   </div>
 
                   {/* Language */}

@@ -336,6 +336,7 @@ export interface HardcoverSearchResult {
   isbn?: string;
   description?: string;
   slug?: string;
+  pageCount?: number;
 }
 
 export const HARDCOVER_SEARCH_PAGE_SIZE = 20;
@@ -371,6 +372,9 @@ function extractSearchResults(results: any): HardcoverSearchResult[] {
       isbn,
       description: doc.description || undefined,
       slug: doc.slug || undefined,
+      pageCount: [doc.pages, doc.page_count, doc.pages_count, doc.default_edition?.pages]
+        .map(Number)
+        .find((value) => Number.isFinite(value) && value > 0),
     });
   }
   return books;

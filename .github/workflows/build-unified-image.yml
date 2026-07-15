@@ -63,8 +63,13 @@ jobs:
       - name: Capture version information
         id: version
         run: |
-          APP_VERSION=$(node -p "require('./package.json').version")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
           GIT_COMMIT=$(git rev-parse --short=7 HEAD)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            APP_VERSION="sha-$GIT_COMMIT"
+          else
+            APP_VERSION="$PACKAGE_VERSION"
+          fi
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           {
             echo "app_version=$APP_VERSION"

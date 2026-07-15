@@ -34,6 +34,7 @@ describe('hardcover-api.service searchHardcoverBooks', () => {
                     isbns: ['9780000000001'],
                     description: 'A thriller.',
                     slug: 'the-housemaid',
+                    pages: 336,
                   },
                 },
                 {
@@ -63,6 +64,7 @@ describe('hardcover-api.service searchHardcoverBooks', () => {
       isbn: '9780000000001',
       description: 'A thriller.',
       slug: 'the-housemaid',
+      pageCount: 336,
     });
     expect(books[1].author).toBe('Some Author');
     expect(books[1].coverUrl).toBeUndefined();
