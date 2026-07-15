@@ -13,6 +13,8 @@ import { RMABLogger } from '@/lib/utils/logger';
 
 const logger = RMABLogger.create('BookDate');
 
+const BOOKORBIT_LIBRARY_ID = 'bookorbit';
+
 export interface LibraryBook {
   title: string;
   author: string;
@@ -26,7 +28,7 @@ interface CachedLibraryBook {
   narrator: string | null;
   plexGuid: string;
   plexRatingKey: string | null;
-  userRating?: any; // Admin's cached rating
+  userRating?: { toString(): string } | null; // Admin's cached rating
 }
 
 export interface SwipeHistory {
@@ -114,7 +116,7 @@ async function enrichWithUserRatings(
     const encryptionService = getEncryptionService();
     try {
       userPlexToken = encryptionService.decrypt(user.authToken);
-    } catch (decryptError) {
+    } catch {
       // Token might be stored as plain text (from before encryption or different implementation)
       // Try using it as-is
       logger.warn('Failed to decrypt user Plex token, trying as plain text');
@@ -201,12 +203,16 @@ async function enrichWithUserRatings(
         };
       });
 
-    } catch (fetchError: any) {
-      if (fetchError?.response?.status === 401 || fetchError?.message?.includes('401')) {
+    } catch (fetchError: unknown) {
+      const fetchMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      const fetchStatus = typeof fetchError === 'object' && fetchError !== null && 'response' in fetchError
+        ? (fetchError as { response?: { status?: number } }).response?.status
+        : undefined;
+      if (fetchStatus === 401 || fetchMessage.includes('401')) {
         logger.warn('User token unauthorized for library access (shared users may not have direct API access)');
         logger.warn('Falling back to recommendations without user ratings');
       } else {
-        logger.error('Failed to fetch library with user token', { error: fetchError instanceof Error ? fetchError.message : String(fetchError) });
+        logger.error('Failed to fetch library with user token', { error: fetchMessage });
       }
       // Fallback: return books without ratings
       return cachedBooks.map(book => ({
@@ -230,7 +236,7 @@ async function enrichWithUserRatings(
 }
 
 /**
- * Get user's Plex library books based on scope
+ * Get user's audiobook and BookOrbit library books based on scope
  * @param userId - User ID
  * @param scope - 'full' | 'listened' | 'rated' | 'favorites'
  * @returns Array of library books (max 40)
@@ -264,7 +270,7 @@ export async function getUserLibraryBooks(
         logger.warn('Favorites scope selected but no favorites stored, falling back to full library');
         scope = 'full';
       } else {
-        // Get library ID for filtering
+        // Get library IDs for filtering
         let libraryId: string;
         if (backendMode === 'audiobookshelf') {
           const absLibraryId = await configService.get('audiobookshelf.library_id');
@@ -282,11 +288,13 @@ export async function getUserLibraryBooks(
           libraryId = plexConfig.libraryId;
         }
 
-        // Query favorite books
+        const libraryIds = [libraryId, BOOKORBIT_LIBRARY_ID];
+
+        // Query favorite books from the current audiobook library plus BookOrbit ebooks
         const cachedBooks = await prisma.plexLibrary.findMany({
           where: {
             id: { in: favoriteIds },
-            plexLibraryId: libraryId, // Ensure books are from current library
+            plexLibraryId: { in: libraryIds },
           },
           select: {
             title: true,
@@ -344,7 +352,7 @@ export async function getUserLibraryBooks(
     const isLocalAdmin = user?.plexId.startsWith('local-') ?? false;
 
     // Build query filters
-    let whereClause: any = { plexLibraryId: libraryId };
+    const whereClause: { plexLibraryId: string; userRating?: { not: null } } = { plexLibraryId: libraryId };
     let takeLimit = 40;
 
     // Apply rating filter only for Plex backend with rated scope
@@ -359,7 +367,7 @@ export async function getUserLibraryBooks(
     }
 
     // Query library from database (same table for both backends)
-    let cachedBooks = await prisma.plexLibrary.findMany({
+    const cachedBooks = await prisma.plexLibrary.findMany({
       where: whereClause,
       orderBy: {
         addedAt: 'desc',
@@ -765,7 +773,11 @@ export async function callAI(
     }
 
     // Try with json_schema first
-    let requestBody: any = {
+    const requestBody: {
+      model: string;
+      response_format?: typeof responseSchema;
+      messages: Array<{ role: 'system' | 'user'; content: string }>;
+    } = {
       model,
       response_format: responseSchema,
       messages: [
@@ -849,9 +861,10 @@ export async function callAI(
 
       return JSON.parse(cleanedContent);
 
-    } catch (error: any) {
-      logger.error('Custom provider error:', error);
-      throw new Error(`Custom provider error: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Custom provider error:', { error: message });
+      throw new Error(`Custom provider error: ${message}`);
     }
 
   } else {
