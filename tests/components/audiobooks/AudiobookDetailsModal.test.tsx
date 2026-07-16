@@ -177,7 +177,7 @@ describe('AudiobookDetailsModal', () => {
     );
 
     await act(async () => {});
-    const requestButton = screen.getByRole('button', { name: 'Request Audiobook' });
+    const requestButton = screen.getByRole('button', { name: 'Submit Request' });
     fireEvent.click(requestButton);
 
     const requestPromise = createRequestMock.mock.results[0]?.value;
@@ -224,9 +224,9 @@ describe('AudiobookDetailsModal', () => {
     );
 
     await act(async () => {});
-    fireEvent.click(screen.getByRole('button', { name: 'Both' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Both formats' }));
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Request Both' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Submit Request' }));
     });
 
     expect(createRequestMock).toHaveBeenNthCalledWith(1, audiobookDetails, { mediaType: 'audiobook' });
@@ -325,8 +325,11 @@ describe('AudiobookDetailsModal', () => {
     );
 
     await act(async () => {});
-    expect(screen.getByRole('button', { name: 'Request Audiobook' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Request EPUB' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Audiobook' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Audiobook' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'eBook (EPUB)' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Both formats' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Submit Request' })).toBeEnabled();
   });
 
   it('offers EPUB request when only the audiobook is available', async () => {
@@ -355,8 +358,11 @@ describe('AudiobookDetailsModal', () => {
     );
 
     await act(async () => {});
-    expect(screen.getByRole('button', { name: 'Request EPUB' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Request Audiobook' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'eBook (EPUB)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'eBook (EPUB)' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Audiobook' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Both formats' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Submit Request' })).toBeEnabled();
   });
 
   it('hides request options when audiobook and ebook are both available', async () => {
@@ -422,8 +428,8 @@ describe('AudiobookDetailsModal', () => {
     );
 
     await act(async () => {});
-    // Denied status allows re-requesting, shows Request Audiobook button
-    expect(screen.getByRole('button', { name: 'Request Audiobook' })).toBeInTheDocument();
+    // Denied status allows re-requesting.
+    expect(screen.getByRole('button', { name: 'Submit Request' })).toBeInTheDocument();
   });
 
   it('does not show rating badge when rating is zero', async () => {
@@ -448,6 +454,7 @@ describe('AudiobookDetailsModal', () => {
   });
 
   it('opens interactive search when requested', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'admin-1', username: 'admin', role: 'admin' } });
     const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
 
     render(
@@ -461,9 +468,9 @@ describe('AudiobookDetailsModal', () => {
     await act(async () => {});
 
     expect(screen.queryByTestId('interactive-modal')).toBeNull();
-
-    // Interactive Search now renders twice (small icon in the mobile header, full icon in the desktop action bar)
-    fireEvent.click(screen.getAllByTitle('Interactive Search')[0]);
+    expect(screen.queryByRole('button', { name: 'Interactive Search' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Admin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Interactive Search' }));
 
     expect(screen.getByTestId('interactive-modal')).toHaveAttribute('data-open', 'true');
   });
@@ -482,7 +489,7 @@ describe('AudiobookDetailsModal', () => {
     );
 
     await act(async () => {});
-    fireEvent.click(screen.getByRole('button', { name: 'Request Audiobook' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Request' }));
 
     const requestPromise = createRequestMock.mock.results[0]?.value;
     await act(async () => {
@@ -502,7 +509,7 @@ describe('AudiobookDetailsModal', () => {
     expect(screen.queryByText('Request failed')).toBeNull();
   });
 
-  it('renders sticky footer with status pill and admin icons when opened from a pending request', async () => {
+  it('reveals admin tools from the sticky footer when opened from a pending request', async () => {
     useAuthMock.mockReturnValue({ user: { id: 'admin-1', username: 'admin', role: 'admin' } });
     const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
 
@@ -520,8 +527,16 @@ describe('AudiobookDetailsModal', () => {
 
     const statusPill = screen.getByRole('button', { name: 'Requested' });
     expect(statusPill).toBeDisabled();
-    expect(screen.getAllByTitle('Interactive Search').length).toBeGreaterThan(0);
-    expect(screen.getByTitle('Manual Import')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Interactive Search' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Manual Import' })).toBeNull();
+
+    const adminButton = screen.getByRole('button', { name: 'Admin' });
+    expect(adminButton).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(adminButton);
+
+    expect(adminButton).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Interactive Search' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manual Import' })).toBeInTheDocument();
   });
 
   it('does not show a Read more toggle for a short summary', async () => {

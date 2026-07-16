@@ -30,7 +30,7 @@ src/components/
 **Audiobooks**
 - **AudiobookCard** ✅ - Cover, title, author, narrator, duration, clickable to open details modal. Request actions live in details modal for touch-first use. Shows "Requested by [username]" when someone else has requested the book, "Requested" when current user has requested it. Corner badges show a headphone icon when the audiobook is available in-library and a book icon when the ebook is available, so users can browse for "have one format, want the other."
 - **AudiobookGrid** - Responsive grid (1/2/3/4 cols)
-- **AudiobookDetailsModal** ✅ - Full-screen modal with comprehensive metadata (description, genres, rating, release date, narrator, language, format, publisher, request functionality). Shows requesting user's name when applicable. Request actions are format-aware: offer only missing audiobook/EPUB formats, include `Both` when neither exists, and hide request actions when both are available. Long summaries are clamped to 4 lines with a "Read more"/"Show less" toggle driven by `useIsClamped` (real `scrollHeight`/`clientHeight` overflow measurement, not a character-count guess — the same text wraps into more lines on narrower mobile viewports). On mobile only, the Interactive Search and Ignore Toggle icons move to a smaller upper-left corner row and Manual Import is hidden; desktop keeps the original bottom action bar.
+- **AudiobookDetailsModal** ✅ - Full-screen modal with comprehensive metadata (description, genres, rating, release date, narrator, language, format, publisher, request functionality). Shows requesting user's name when applicable. Request actions use large format cards for Audiobook, eBook (EPUB), and Both formats, disabling formats that are already owned and hiding the selector when both are available. Cards render in three columns on desktop and stack vertically with descriptions on mobile, followed by a full-width `Submit Request` action. Long summaries are clamped to 4 lines with a "Read more"/"Show less" toggle driven by `useIsClamped` (real `scrollHeight`/`clientHeight` overflow measurement, not a character-count guess — the same text wraps into more lines on narrower mobile viewports). Interactive Search, Manual Import, ebook source search, ignore/unignore, and injected request-management actions are consolidated behind an admin-only gear disclosure in the sticky footer instead of appearing in the primary user interface.
 
 Audiobook details can also include optional Hardcover enrichment: ebook page count, ISBN, aggregate rating, and a Hardcover source link. Audible and Hardcover ratings appear as labeled badges on the cover. Up to five top public Hardcover reviews are available in a collapsed in-app section above Details; reviews marked as spoilers require a second click before their text is revealed. This enrichment is best-effort and does not block Audible details.
 
@@ -127,7 +127,7 @@ interface AudiobookDetailsModalProps {
   hideRequestActions?: boolean; // Hides sticky action bar for read-only contexts (BookDate, ShelvesSection)
   hasReportedIssue?: boolean;
   aiReason?: string | null;
-  adminActions?: React.ReactNode; // Optional admin buttons (Approve/Search/Deny) rendered as second row in action bar
+  adminActions?: React.ReactNode; // Optional admin buttons (Approve/Search/Deny) rendered in the admin tools disclosure
 }
 
 interface RequestCardProps {

@@ -45,6 +45,92 @@ interface AudiobookDetailsModalProps {
 
 type RequestFormat = 'audiobook' | 'epub' | 'both';
 
+const FORMAT_OPTIONS: Array<{
+  value: RequestFormat;
+  label: string;
+  description: string;
+  accent: string;
+}> = [
+  { value: 'audiobook', label: 'Audiobook', description: 'Listen on the go', accent: 'text-purple-500' },
+  { value: 'epub', label: 'eBook (EPUB)', description: 'Read digitally', accent: 'text-emerald-400' },
+  { value: 'both', label: 'Both formats', description: 'Get both versions', accent: 'text-blue-400' },
+];
+
+function FormatOptionIcon({ format, className }: { format: RequestFormat; className: string }) {
+  if (format === 'epub') {
+    return (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 6.25c-1.35-1.1-3.1-1.75-5-1.75-1.1 0-2.1.2-3 .55V18c.9-.35 1.9-.55 3-.55 1.9 0 3.65.65 5 1.75m0-12.95c1.35-1.1 3.1-1.75 5-1.75 1.1 0 2.1.2 3 .55V18c-.9-.35-1.9-.55-3-.55-1.9 0-3.65.65-5 1.75m0-12.95V19.2" />
+      </svg>
+    );
+  }
+
+  const headphones = (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 14v-2a8 8 0 0116 0v2m-16 0v3a2 2 0 002 2h1v-7H6a2 2 0 00-2 2zm16 0v3a2 2 0 01-2 2h-1v-7h1a2 2 0 012 2z" />
+    </svg>
+  );
+
+  if (format === 'both') {
+    return (
+      <div className="flex items-center -space-x-1" aria-hidden="true">
+        {headphones}
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 6.25c-1.35-1.1-3.1-1.75-5-1.75-1.1 0-2.1.2-3 .55V18c.9-.35 1.9-.55 3-.55 1.9 0 3.65.65 5 1.75m0-12.95c1.35-1.1 3.1-1.75 5-1.75 1.1 0 2.1.2 3 .55V18c-.9-.35-1.9-.55-3-.55-1.9 0-3.65.65-5 1.75m0-12.95V19.2" />
+        </svg>
+      </div>
+    );
+  }
+
+  return headphones;
+}
+
+function FormatOptionCard({
+  option,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  option: (typeof FORMAT_OPTIONS)[number];
+  selected: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      aria-label={option.label}
+      aria-pressed={selected}
+      className={`relative flex min-h-[112px] items-center gap-5 rounded-2xl border px-6 py-5 text-left transition-all sm:min-h-[132px] sm:flex-col sm:justify-center sm:gap-3 sm:text-center ${
+        selected
+          ? 'border-purple-500 bg-purple-500/10 shadow-[0_0_28px_rgba(139,92,246,0.12)] ring-1 ring-purple-500/40'
+          : 'border-gray-300 bg-white/40 hover:border-gray-400 dark:border-gray-700 dark:bg-gray-900/40 dark:hover:border-gray-600'
+      } ${disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}
+    >
+      <FormatOptionIcon format={option.value} className={`h-11 w-11 ${option.accent}`} />
+      <span>
+        <span className={`block text-lg font-semibold ${selected ? 'text-purple-500 dark:text-purple-400' : 'text-gray-900 dark:text-gray-100'}`}>
+          {option.label}
+        </span>
+        <span className="mt-1 block text-sm text-gray-500 dark:text-gray-400 sm:hidden">{option.description}</span>
+      </span>
+      <span className={`absolute right-5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-2 sm:right-4 sm:top-4 sm:translate-y-0 ${
+        selected
+          ? 'border-purple-500 bg-purple-500 text-white'
+          : 'border-gray-400 text-transparent dark:border-gray-600'
+      }`} aria-hidden="true">
+        {selected && (
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </span>
+    </button>
+  );
+}
+
 // Status helper
 const getStatusInfo = (isAvailable: boolean, requestStatus: string | null, requestedByUsername: string | null) => {
   if (isAvailable || requestStatus === 'completed') {
@@ -114,6 +200,7 @@ export function AudiobookDetailsModal({
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [reviewsExpanded, setReviewsExpanded] = useState(false);
   const [revealedSpoilerReviews, setRevealedSpoilerReviews] = useState<Set<string>>(new Set());
+  const [showAdminTools, setShowAdminTools] = useState(false);
   const descriptionRef = useRef<HTMLParagraphElement>(null);
   // Real overflow detection instead of a character-count guess, since the same
   // text wraps into more lines on narrower (mobile) viewports.
@@ -132,6 +219,7 @@ export function AudiobookDetailsModal({
     setDescriptionExpanded(false);
     setReviewsExpanded(false);
     setRevealedSpoilerReviews(new Set());
+    setShowAdminTools(false);
   }, [asin]);
 
   const effectiveStatus = localRequestStatus;
@@ -144,7 +232,7 @@ export function AudiobookDetailsModal({
   const canRequestAudiobook = !audiobookAvailable && status.canRequest;
   const canSearchAudiobook = !audiobookAvailable;
   const canRequestEbook = !ebookAvailable && !!ebookStatus?.ebookSourcesEnabled && !ebookStatus?.hasActiveEbookRequest;
-  const ebookSearchIconVisible = canRequestEbook && audiobookAvailable && !!user && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false);
+  const canSearchEbook = canRequestEbook && audiobookAvailable;
   const requestableFormats = useMemo<RequestFormat[]>(() => [
     ...(canRequestAudiobook ? ['audiobook' as const] : []),
     ...(canRequestEbook ? ['epub' as const] : []),
@@ -308,39 +396,6 @@ export function AudiobookDetailsModal({
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Audiobook Details</span>
 
-            {/* Interactive Search - moved here on mobile (smaller icon), desktop keeps it in the action bar */}
-            {canSearchAudiobook && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false) && (
-              <button
-                onClick={handleInteractiveSearch}
-                disabled={!user}
-                className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 flex-shrink-0"
-                title="Interactive Search"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </button>
-            )}
-
-            {/* Ignore Toggle - moved here on mobile (smaller icon), desktop keeps it in the action bar */}
-            {user && !isLoadingIgnore && (
-              <button
-                onClick={handleToggleIgnore}
-                disabled={isTogglingIgnore}
-                className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0 ${
-                  isIgnored
-                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                    : 'bg-gray-100 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
-                title={isIgnored ? 'Stop Ignoring — auto-requests will resume for this book' : 'Ignore from Auto-Requests'}
-              >
-                {isIgnored ? (
-                  <EyeSlashSolidIcon className="w-4 h-4" />
-                ) : (
-                  <EyeSlashIcon className="w-4 h-4" />
-                )}
-              </button>
-            )}
           </div>
           <button
             onClick={onClose}
@@ -849,122 +904,38 @@ export function AudiobookDetailsModal({
         {/* Sticky Action Bar - hidden when opened from read-only contexts */}
         {audiobook && !isLoading && !hideRequestActions && (
           <div
-            className="sticky bottom-0 z-20 p-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-t border-gray-200/50 dark:border-gray-700/50"
+            className="sticky bottom-0 z-20 max-h-[75dvh] overflow-y-auto border-t border-gray-200/50 bg-white/90 p-4 backdrop-blur-md dark:border-gray-700/50 dark:bg-gray-900/90 sm:max-h-[70dvh]"
             style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
           >
-            <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[1fr_auto] sm:items-center sm:gap-3">
-              {/* Format Selector - own row, full width */}
-              {requestableFormats.length > 1 && (
-                <div className={`sm:col-span-2 grid gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800 ${
-                  requestableFormats.includes('both') ? 'grid-cols-3' : 'grid-cols-2'
-                }`}>
-                  <button
-                    type="button"
-                    onClick={() => setRequestFormat('audiobook')}
-                    disabled={!requestableFormats.includes('audiobook')}
-                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                      requestFormat === 'audiobook'
-                        ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
-                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-                    }`}
-                  >
-                    Audiobook
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRequestFormat('epub')}
-                    disabled={!requestableFormats.includes('epub')}
-                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                      requestFormat === 'epub'
-                        ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
-                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-                    }`}
-                  >
-                    EPUB
-                  </button>
-                  {requestableFormats.includes('both') && (
-                    <button
-                      type="button"
-                      onClick={() => setRequestFormat('both')}
-                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                        requestFormat === 'both'
-                          ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-700 dark:text-blue-300'
-                          : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-                      }`}
-                    >
-                      Both
-                    </button>
-                  )}
+            <div className="flex flex-col gap-4">
+              {requestableFormats.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Format</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose the format you&apos;d like.</p>
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {FORMAT_OPTIONS.map((option) => (
+                      <FormatOptionCard
+                        key={option.value}
+                        option={option}
+                        selected={requestFormat === option.value}
+                        disabled={!requestableFormats.includes(option.value)}
+                        onSelect={() => setRequestFormat(option.value)}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-4 rounded-2xl border border-amber-400/25 bg-amber-400/[0.06] px-5 py-4">
+                    <span className="text-3xl text-amber-400" aria-hidden="true">✧</span>
+                    <span>
+                      <span className="block font-semibold text-gray-900 dark:text-gray-100">Can&apos;t find what you&apos;re looking for?</span>
+                      <span className="mt-0.5 block text-sm text-gray-500 dark:text-gray-400">We&apos;ll do our best to get it for you!</span>
+                    </span>
+                  </div>
                 </div>
               )}
 
-              {/* Icon Actions - right column on desktop. On mobile, Interactive Search and
-                  Ignore Toggle move to the header (smaller icons, upper-left); Manual Import
-                  is desktop-only. Only the ebook-search icon can still appear in this row on mobile. */}
-              {(canSearchAudiobook || (canRequestEbook && audiobookAvailable) || (user && !isLoadingIgnore)) && (
-              <div className={`${ebookSearchIconVisible ? 'flex' : 'hidden'} sm:flex items-center justify-end gap-3 order-2 sm:order-none sm:col-start-2 sm:row-start-2`}>
-                {/* Interactive Search - only when the audiobook is missing and user has permission. Desktop only; see mobile header. */}
-                {canSearchAudiobook && (user?.role === 'admin' || user?.permissions?.interactiveSearch !== false) && (
-                  <button
-                    onClick={handleInteractiveSearch}
-                    disabled={!user}
-                    className="hidden sm:flex p-3 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
-                    title="Interactive Search"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </button>
-                )}
-
-                {/* Manual Import - admin only, hidden during active processing and completed states. Desktop only. */}
-                {user?.role === 'admin' && canSearchAudiobook && !['downloading', 'processing', 'searching', 'downloaded', 'completed', 'available'].includes(audiobookEffectiveStatus || '') && (
-                  <button
-                    onClick={() => setShowManualImport(true)}
-                    className="hidden sm:flex p-3 rounded-xl bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 hover:bg-teal-200 dark:hover:bg-teal-900/50 transition-colors"
-                    title="Manual Import"
-                  >
-                    <FolderArrowDownIcon className="w-6 h-6" />
-                  </button>
-                )}
-
-                {/* Ebook interactive search - available when the audiobook exists and the ebook is missing */}
-                {ebookSearchIconVisible && (
-                  <button
-                    onClick={() => setShowInteractiveSearchEbook(true)}
-                    className="p-3 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
-                    title="Search Ebook Sources"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                    </svg>
-                  </button>
-                )}
-
-                {/* Ignore Toggle - always visible when user is logged in. Desktop only; see mobile header. */}
-                {user && !isLoadingIgnore && (
-                  <button
-                    onClick={handleToggleIgnore}
-                    disabled={isTogglingIgnore}
-                    className={`hidden sm:flex p-3 rounded-xl transition-colors disabled:opacity-50 ${
-                      isIgnored
-                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                        : 'bg-gray-100 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
-                    }`}
-                    title={isIgnored ? 'Stop Ignoring — auto-requests will resume for this book' : 'Ignore from Auto-Requests'}
-                  >
-                    {isIgnored ? (
-                      <EyeSlashSolidIcon className="w-6 h-6" />
-                    ) : (
-                      <EyeSlashIcon className="w-6 h-6" />
-                    )}
-                  </button>
-                )}
-              </div>
-              )}
-
               {/* Main Action */}
-              <div className="order-3 sm:order-none sm:col-start-1 sm:row-start-2">
+              <div>
                 {bothFormatsAvailable ? (
                   <button
                     disabled
@@ -976,7 +947,7 @@ export function AudiobookDetailsModal({
                   <button
                     onClick={handleRequest}
                     disabled={isRequesting || !user || !canRequestSelectedFormat}
-                    className="w-full py-3 px-4 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full rounded-2xl bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 px-5 py-4 text-lg font-semibold text-white shadow-lg shadow-purple-900/20 transition-all hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isRequesting ? (
                       <span className="flex items-center justify-center gap-2">
@@ -986,7 +957,14 @@ export function AudiobookDetailsModal({
                         </svg>
                         Requesting...
                       </span>
-                    ) : !user ? 'Sign in to Request' : `Request ${requestFormat === 'both' ? 'Both' : requestFormat === 'epub' ? 'EPUB' : 'Audiobook'}`}
+                    ) : !user ? 'Sign in to Request' : (
+                      <span className="flex items-center justify-center gap-3">
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 11.5L21 3l-8.5 18-2.25-7.25L3 11.5zM10.25 13.75L15 9" />
+                        </svg>
+                        Submit Request
+                      </span>
+                    )}
                   </button>
                 ) : (
                   <button
@@ -1020,12 +998,55 @@ export function AudiobookDetailsModal({
               </div>
             </div>
 
-            {/* Admin Actions Row (Approve / Search / Deny) — injected by admin pages */}
-            {adminActions && (
-              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-amber-200 dark:border-amber-700/50">
-                {adminActions}
+            {user?.role === 'admin' && showAdminTools && (
+              <div id="audiobook-admin-tools" className="mt-1 rounded-2xl border border-gray-200 bg-gray-50/80 p-3 dark:border-gray-700 dark:bg-gray-800/60">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Admin tools</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {adminActions && (
+                    <div className="mb-1 border-b border-gray-200 pb-3 dark:border-gray-700 sm:col-span-2">
+                      {adminActions}
+                    </div>
+                  )}
+                  {canSearchAudiobook && (
+                    <button type="button" onClick={handleInteractiveSearch} className="flex items-center gap-3 rounded-xl bg-purple-100 px-4 py-3 text-left text-sm font-medium text-purple-700 transition-colors hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50">
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                      Interactive Search
+                    </button>
+                  )}
+                  {canSearchAudiobook && !['downloading', 'processing', 'searching', 'downloaded', 'completed', 'available'].includes(audiobookEffectiveStatus || '') && (
+                    <button type="button" onClick={() => setShowManualImport(true)} className="flex items-center gap-3 rounded-xl bg-teal-100 px-4 py-3 text-left text-sm font-medium text-teal-700 transition-colors hover:bg-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:hover:bg-teal-900/50">
+                      <FolderArrowDownIcon className="h-5 w-5" />
+                      Manual Import
+                    </button>
+                  )}
+                  {canSearchEbook && (
+                    <button type="button" onClick={() => setShowInteractiveSearchEbook(true)} className="flex items-center gap-3 rounded-xl bg-orange-100 px-4 py-3 text-left text-sm font-medium text-orange-700 transition-colors hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:hover:bg-orange-900/50">
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                      Search Ebook Sources
+                    </button>
+                  )}
+                  {!isLoadingIgnore && (
+                    <button type="button" onClick={handleToggleIgnore} disabled={isTogglingIgnore} className="flex items-center gap-3 rounded-xl bg-gray-200 px-4 py-3 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-300 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
+                      {isIgnored ? <EyeSlashSolidIcon className="h-5 w-5" /> : <EyeSlashIcon className="h-5 w-5" />}
+                      {isIgnored ? 'Stop Ignoring' : 'Ignore from Auto-Requests'}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
+
+            <div className="flex items-center justify-between gap-4 pt-1 text-sm text-gray-500 dark:text-gray-400">
+              <span className="flex min-w-0 items-center gap-2">
+                <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11V7a5 5 0 0110 0v4m-11 0h12a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1v-8a1 1 0 011-1z" /></svg>
+                <span className="truncate">Request handling follows your server&apos;s approval settings.</span>
+              </span>
+              {user?.role === 'admin' && (
+                <button type="button" onClick={() => setShowAdminTools((show) => !show)} className="flex flex-shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-gray-800 dark:hover:text-gray-200" aria-expanded={showAdminTools} aria-controls="audiobook-admin-tools">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.6 3.2l.5 1.6a7.5 7.5 0 013.8 0l.5-1.6 2.1.9-.8 1.5a7.4 7.4 0 012.7 2.7l1.5-.8.9 2.1-1.6.5a7.5 7.5 0 010 3.8l1.6.5-.9 2.1-1.5-.8a7.4 7.4 0 01-2.7 2.7l.8 1.5-2.1.9-.5-1.6a7.5 7.5 0 01-3.8 0l-.5 1.6-2.1-.9.8-1.5a7.4 7.4 0 01-2.7-2.7l-1.5.8-.9-2.1 1.6-.5a7.5 7.5 0 010-3.8l-1.6-.5.9-2.1 1.5.8a7.4 7.4 0 012.7-2.7l-.8-1.5 2.1-.9zM12 9a3 3 0 100 6 3 3 0 000-6z" /></svg>
+                  Admin
+                </button>
+              )}
+            </div>
           </div>
         )}
 
