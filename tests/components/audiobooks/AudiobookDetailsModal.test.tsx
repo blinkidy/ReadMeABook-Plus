@@ -496,7 +496,7 @@ describe('AudiobookDetailsModal', () => {
     expect(screen.queryByText('Admin tools')).toBeNull();
   });
 
-  it('keeps the sticky request footer fully exposed without nested scrolling', async () => {
+  it('scrolls the request footer on mobile and keeps it fully exposed on larger screens', async () => {
     const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
 
     render(<AudiobookDetailsModal asin="ASIN123" isOpen={true} onClose={vi.fn()} />);
@@ -504,9 +504,10 @@ describe('AudiobookDetailsModal', () => {
 
     const footer = screen.getByText('Format').closest('.sticky');
     expect(footer).toBeInTheDocument();
-    expect(footer).not.toHaveClass('overflow-y-auto');
+    expect(footer).toHaveClass('max-h-[70dvh]', 'overflow-y-auto', 'sm:max-h-none', 'sm:overflow-visible');
     expect(screen.getByText('Format')).toHaveClass('uppercase', 'text-gray-500');
     expect(screen.getByText("Choose the format you'd like.")).toHaveClass('dark:text-gray-200');
+    expect(screen.queryByText("Can't find what you're looking for?")).toBeNull();
   });
 
   it('shows request error and clears it after timeout', async () => {

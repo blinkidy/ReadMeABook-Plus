@@ -999,7 +999,7 @@ export function AudiobookDetailsModal({
         {/* Sticky Action Bar - hidden when opened from read-only contexts */}
         {audiobook && !isLoading && !hideRequestActions && (
           <div
-            className="sticky bottom-0 z-20 border-t border-gray-200/50 bg-white/90 p-3 backdrop-blur-md dark:border-gray-700/50 dark:bg-gray-900/90"
+            className="sticky bottom-0 z-20 max-h-[70dvh] overflow-y-auto overscroll-contain border-t border-gray-200/50 bg-white/90 p-3 backdrop-blur-md dark:border-gray-700/50 dark:bg-gray-900/90 sm:max-h-none sm:overflow-visible"
             style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
           >
             <div className="flex flex-col gap-3">
@@ -1019,13 +1019,6 @@ export function AudiobookDetailsModal({
                     ))}
                   </div>
 
-                  <div className="mt-3 flex items-center gap-3 rounded-xl border border-amber-400/25 bg-amber-400/[0.06] px-4 py-3">
-                    <span className="text-2xl text-amber-400" aria-hidden="true">✧</span>
-                    <span>
-                      <span className="block font-semibold text-gray-900 dark:text-gray-100">Can&apos;t find what you&apos;re looking for?</span>
-                      <span className="mt-0.5 block text-sm text-gray-500 dark:text-gray-400">We&apos;ll do our best to get it for you!</span>
-                    </span>
-                  </div>
                 </div>
               )}
 
