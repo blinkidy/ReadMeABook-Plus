@@ -8,6 +8,7 @@ import { createPrismaMock } from '../helpers/prisma';
 
 const prismaMock = createPrismaMock();
 const createRequestForUserMock = vi.hoisted(() => vi.fn());
+const audibleSearchMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/db', () => ({
   prisma: prismaMock,
@@ -19,7 +20,7 @@ vi.mock('@/lib/services/request-creator.service', () => ({
 
 vi.mock('@/lib/integrations/audible.service', () => ({
   getAudibleService: () => ({
-    search: vi.fn(),
+    search: audibleSearchMock,
   }),
 }));
 
@@ -99,5 +100,44 @@ describe('shelf sync core request media type', () => {
       }),
       { mediaType: 'audiobook' },
     );
+  });
+
+  it('creates an EPUB request from Hardcover metadata when no Audible edition exists', async () => {
+    prismaMock.bookMapping.findUnique.mockResolvedValueOnce(null);
+    const { processShelfBooks, resolveShelfRequestMediaType, createEmptyStats } = await import('@/lib/services/shelf-sync-core.service');
+    const stats = createEmptyStats();
+
+    await processShelfBooks(
+      'hardcover',
+      [{
+        bookId: 'hardcover-1421',
+        title: 'Drowning: The Rescue of Flight 1421',
+        author: 'T.J. Newman',
+        coverUrl: 'https://example.com/drowning.jpg',
+      }],
+      'user-1',
+      'shelf-1',
+      stats,
+      log,
+      10,
+      true,
+      resolveShelfRequestMediaType('Want To Own Books'),
+    );
+
+    expect(createRequestForUserMock).toHaveBeenCalledWith(
+      'user-1',
+      {
+        title: 'Drowning: The Rescue of Flight 1421',
+        author: 'T.J. Newman',
+        coverArtUrl: 'https://example.com/drowning.jpg',
+      },
+      { mediaType: 'epub' },
+    );
+    expect(audibleSearchMock).not.toHaveBeenCalled();
+    expect(stats).toEqual(expect.objectContaining({
+      booksFound: 1,
+      lookupsPerformed: 0,
+      requestsCreated: 1,
+    }));
   });
 });

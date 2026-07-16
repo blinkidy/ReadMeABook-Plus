@@ -223,7 +223,7 @@ export function AddShelfModal({ isOpen, onClose }: AddShelfModalProps) {
             <div>
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Auto-request books</span>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                Automatically request audiobooks from this shelf
+                Automatically request this shelf&apos;s mapped format
               </p>
             </div>
             <button
