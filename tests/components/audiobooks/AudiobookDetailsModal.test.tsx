@@ -117,7 +117,7 @@ describe('AudiobookDetailsModal', () => {
           {
             id: 'review-1',
             rating: 4.5,
-            text: 'An excellent space opera.',
+            text: '<p>An excellent <strong>space opera.</strong></p><img src=x onerror=alert(1)>',
             hasSpoilers: false,
             likesCount: 42,
             reviewer: 'Reader One',
@@ -154,7 +154,10 @@ describe('AudiobookDetailsModal', () => {
     expect(reviewsToggle).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(reviewsToggle);
     expect(reviewsToggle).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('An excellent space opera.')).toBeInTheDocument();
+    expect(screen.getByText(/An excellent/)).toBeInTheDocument();
+    expect(screen.getByText('space opera.').tagName).toBe('STRONG');
+    expect(screen.queryByText(/<p>|<strong>/)).toBeNull();
+    expect(document.querySelector('img[src="x"]')).toBeNull();
     expect(screen.queryByText('The ending changes everything.')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /contains spoilers/i }));
     expect(screen.getByText('The ending changes everything.')).toBeInTheDocument();
@@ -491,6 +494,20 @@ describe('AudiobookDetailsModal', () => {
     expect(screen.getByRole('button', { name: 'Ignore from Auto-Requests' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Admin' })).toBeNull();
     expect(screen.queryByText('Admin tools')).toBeNull();
+  });
+
+  it('scrolls the request footer on mobile and keeps it fully exposed on larger screens', async () => {
+    const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
+
+    render(<AudiobookDetailsModal asin="ASIN123" isOpen={true} onClose={vi.fn()} />);
+    await act(async () => {});
+
+    const footer = screen.getByText('Format').closest('.sticky');
+    expect(footer).toBeInTheDocument();
+    expect(footer).toHaveClass('max-h-[70dvh]', 'overflow-y-auto', 'sm:max-h-none', 'sm:overflow-visible');
+    expect(screen.getByText('Format')).toHaveClass('uppercase', 'text-gray-500');
+    expect(screen.getByText("Choose the format you'd like.")).toHaveClass('dark:text-gray-200');
+    expect(screen.queryByText("Can't find what you're looking for?")).toBeNull();
   });
 
   it('shows request error and clears it after timeout', async () => {

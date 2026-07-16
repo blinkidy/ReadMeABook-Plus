@@ -56,6 +56,101 @@ const FORMAT_OPTIONS: Array<{
   { value: 'both', label: 'Both formats', description: 'Get both versions', accent: 'text-blue-400' },
 ];
 
+type ReviewMarkupTag = 'root' | 'p' | 'strong' | 'em' | 'ul' | 'ol' | 'li' | 'blockquote' | 'br';
+
+interface ReviewMarkupNode {
+  tag: ReviewMarkupTag;
+  children: Array<ReviewMarkupNode | string>;
+}
+
+const REVIEW_MARKUP_TAGS = new Set<ReviewMarkupTag>([
+  'p',
+  'strong',
+  'em',
+  'ul',
+  'ol',
+  'li',
+  'blockquote',
+  'br',
+]);
+
+function decodeReviewEntities(value: string): string {
+  const namedEntities: Record<string, string> = {
+    amp: '&',
+    apos: "'",
+    gt: '>',
+    lt: '<',
+    nbsp: '\u00a0',
+    quot: '"',
+  };
+
+  return value.replace(/&(#x[\da-f]+|#\d+|amp|apos|gt|lt|nbsp|quot);/gi, (entity, code: string) => {
+    const normalized = code.toLowerCase();
+    if (normalized.startsWith('#')) {
+      const radix = normalized.startsWith('#x') ? 16 : 10;
+      const number = Number.parseInt(normalized.slice(radix === 16 ? 2 : 1), radix);
+      return Number.isSafeInteger(number) && number >= 0 && number <= 0x10ffff
+        ? String.fromCodePoint(number)
+        : entity;
+    }
+    return namedEntities[normalized] ?? entity;
+  });
+}
+
+function parseReviewMarkup(html: string): ReviewMarkupNode {
+  const root: ReviewMarkupNode = { tag: 'root', children: [] };
+  const stack: ReviewMarkupNode[] = [root];
+  const tokens = /<!--[\s\S]*?-->|<\/?([a-z][\w-]*)(?:\s[^<>]*?)?\s*\/?>|([^<]+)/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = tokens.exec(html)) !== null) {
+    const text = match[2];
+    if (text) {
+      stack[stack.length - 1].children.push(decodeReviewEntities(text));
+      continue;
+    }
+
+    if (match[0].startsWith('<!--')) continue;
+    const tag = match[1]?.toLowerCase() as ReviewMarkupTag | undefined;
+    if (!tag || !REVIEW_MARKUP_TAGS.has(tag)) continue;
+
+    const isClosingTag = match[0].startsWith('</');
+    if (isClosingTag) {
+      const openTagIndex = stack.map((node) => node.tag).lastIndexOf(tag);
+      if (openTagIndex > 0) stack.length = openTagIndex;
+      continue;
+    }
+
+    const node: ReviewMarkupNode = { tag, children: [] };
+    stack[stack.length - 1].children.push(node);
+    if (tag !== 'br' && !match[0].endsWith('/>')) stack.push(node);
+  }
+
+  return root;
+}
+
+function renderReviewMarkupNode(node: ReviewMarkupNode, key: string): React.ReactNode {
+  const children = node.children.map((child, index) => (
+    typeof child === 'string' ? child : renderReviewMarkupNode(child, `${key}-${index}`)
+  ));
+
+  switch (node.tag) {
+    case 'p': return <p key={key} className="mt-3 first:mt-0">{children}</p>;
+    case 'strong': return <strong key={key} className="font-semibold text-gray-900 dark:text-gray-100">{children}</strong>;
+    case 'em': return <em key={key}>{children}</em>;
+    case 'ul': return <ul key={key} className="mt-3 list-disc space-y-1 pl-5">{children}</ul>;
+    case 'ol': return <ol key={key} className="mt-3 list-decimal space-y-1 pl-5">{children}</ol>;
+    case 'li': return <li key={key}>{children}</li>;
+    case 'blockquote': return <blockquote key={key} className="mt-3 border-l-2 border-gray-400 pl-3 italic dark:border-gray-600">{children}</blockquote>;
+    case 'br': return <br key={key} />;
+    default: return <React.Fragment key={key}>{children}</React.Fragment>;
+  }
+}
+
+function ReviewMarkup({ html }: { html: string }) {
+  return <>{renderReviewMarkupNode(parseReviewMarkup(html), 'review')}</>;
+}
+
 function FormatOptionIcon({ format, className }: { format: RequestFormat; className: string }) {
   if (format === 'epub') {
     return (
@@ -103,26 +198,26 @@ function FormatOptionCard({
       disabled={disabled}
       aria-label={option.label}
       aria-pressed={selected}
-      className={`relative flex min-h-[112px] items-center gap-5 rounded-2xl border px-6 py-5 text-left transition-all sm:min-h-[132px] sm:flex-col sm:justify-center sm:gap-3 sm:text-center ${
+      className={`relative flex min-h-[88px] items-center gap-4 rounded-xl border px-4 py-3 text-left transition-all sm:min-h-[96px] sm:flex-col sm:justify-center sm:gap-2 sm:text-center ${
         selected
           ? 'border-purple-500 bg-purple-500/10 shadow-[0_0_28px_rgba(139,92,246,0.12)] ring-1 ring-purple-500/40'
           : 'border-gray-300 bg-white/40 hover:border-gray-400 dark:border-gray-700 dark:bg-gray-900/40 dark:hover:border-gray-600'
       } ${disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}
     >
-      <FormatOptionIcon format={option.value} className={`h-11 w-11 ${option.accent}`} />
+      <FormatOptionIcon format={option.value} className={`h-8 w-8 ${option.accent}`} />
       <span>
-        <span className={`block text-lg font-semibold ${selected ? 'text-purple-500 dark:text-purple-400' : 'text-gray-900 dark:text-gray-100'}`}>
+        <span className={`block text-base font-semibold ${selected ? 'text-purple-500 dark:text-purple-400' : 'text-gray-900 dark:text-gray-100'}`}>
           {option.label}
         </span>
-        <span className="mt-1 block text-sm text-gray-500 dark:text-gray-400 sm:hidden">{option.description}</span>
+        <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400 sm:hidden">{option.description}</span>
       </span>
-      <span className={`absolute right-5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-2 sm:right-4 sm:top-4 sm:translate-y-0 ${
+      <span className={`absolute right-4 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 sm:right-3 sm:top-3 sm:translate-y-0 ${
         selected
           ? 'border-purple-500 bg-purple-500 text-white'
           : 'border-gray-400 text-transparent dark:border-gray-600'
       }`} aria-hidden="true">
         {selected && (
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
           </svg>
         )}
@@ -725,9 +820,9 @@ export function AudiobookDetailsModal({
                             </div>
 
                             {spoilerRevealed ? (
-                              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                                {review.text}
-                              </p>
+                              <div className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                                <ReviewMarkup html={review.text} />
+                              </div>
                             ) : (
                               <button
                                 type="button"
@@ -904,15 +999,15 @@ export function AudiobookDetailsModal({
         {/* Sticky Action Bar - hidden when opened from read-only contexts */}
         {audiobook && !isLoading && !hideRequestActions && (
           <div
-            className="sticky bottom-0 z-20 max-h-[75dvh] overflow-y-auto border-t border-gray-200/50 bg-white/90 p-4 backdrop-blur-md dark:border-gray-700/50 dark:bg-gray-900/90 sm:max-h-[70dvh]"
-            style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+            className="sticky bottom-0 z-20 max-h-[70dvh] overflow-y-auto overscroll-contain border-t border-gray-200/50 bg-white/90 p-3 backdrop-blur-md dark:border-gray-700/50 dark:bg-gray-900/90 sm:max-h-none sm:overflow-visible"
+            style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
           >
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
               {requestableFormats.length > 0 && (
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Format</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose the format you&apos;d like.</p>
-                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Format</h3>
+                  <p className="mt-1 text-sm text-gray-700 dark:text-gray-200">Choose the format you&apos;d like.</p>
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                     {FORMAT_OPTIONS.map((option) => (
                       <FormatOptionCard
                         key={option.value}
@@ -924,13 +1019,6 @@ export function AudiobookDetailsModal({
                     ))}
                   </div>
 
-                  <div className="mt-4 flex items-center gap-4 rounded-2xl border border-amber-400/25 bg-amber-400/[0.06] px-5 py-4">
-                    <span className="text-3xl text-amber-400" aria-hidden="true">✧</span>
-                    <span>
-                      <span className="block font-semibold text-gray-900 dark:text-gray-100">Can&apos;t find what you&apos;re looking for?</span>
-                      <span className="mt-0.5 block text-sm text-gray-500 dark:text-gray-400">We&apos;ll do our best to get it for you!</span>
-                    </span>
-                  </div>
                 </div>
               )}
 
@@ -947,7 +1035,7 @@ export function AudiobookDetailsModal({
                   <button
                     onClick={handleRequest}
                     disabled={isRequesting || !user || !canRequestSelectedFormat}
-                    className="w-full rounded-2xl bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 px-5 py-4 text-lg font-semibold text-white shadow-lg shadow-purple-900/20 transition-all hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full rounded-xl bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 px-5 py-3 text-base font-semibold text-white shadow-lg shadow-purple-900/20 transition-all hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isRequesting ? (
                       <span className="flex items-center justify-center gap-2">
