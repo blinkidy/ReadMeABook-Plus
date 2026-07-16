@@ -35,6 +35,9 @@ describe('hardcover-api.service searchHardcoverBooks', () => {
                     description: 'A thriller.',
                     slug: 'the-housemaid',
                     pages: 336,
+                    rating: 4.31,
+                    ratings_count: 1280,
+                    reviews_count: 245,
                   },
                 },
                 {
@@ -65,6 +68,9 @@ describe('hardcover-api.service searchHardcoverBooks', () => {
       description: 'A thriller.',
       slug: 'the-housemaid',
       pageCount: 336,
+      rating: 4.31,
+      ratingsCount: 1280,
+      reviewsCount: 245,
     });
     expect(books[1].author).toBe('Some Author');
     expect(books[1].coverUrl).toBeUndefined();
@@ -95,5 +101,75 @@ describe('hardcover-api.service searchHardcoverBooks', () => {
 
     const { searchHardcoverBooks } = await import('@/lib/services/hardcover-api.service');
     await expect(searchHardcoverBooks('bad-token', 'query', 1)).rejects.toThrow('bad token');
+  });
+
+  it('fetches aggregate ratings and top public reviews', async () => {
+    axiosMock.post.mockResolvedValue({
+      data: {
+        data: {
+          books_by_pk: {
+            rating: 4.18,
+            ratings_count: 4200,
+            reviews_count: 610,
+          },
+          user_books: [
+            {
+              id: 99,
+              rating: 4.5,
+              review: 'An excellent space opera.',
+              review_has_spoilers: false,
+              reviewed_at: '2026-07-01T12:00:00Z',
+              likes_count: 42,
+              user: { name: 'Reader One', username: 'reader-one' },
+            },
+            {
+              id: 100,
+              rating: null,
+              review: '  A thoughtful spoiler review.  ',
+              review_has_spoilers: true,
+              reviewed_at: null,
+              likes_count: 3,
+              user: { name: null, username: 'reader-two' },
+            },
+          ],
+        },
+      },
+    });
+
+    const { fetchHardcoverBookCommunityDetails } = await import('@/lib/services/hardcover-api.service');
+    const result = await fetchHardcoverBookCommunityDetails('token-123', '456', 5);
+
+    expect(result).toEqual({
+      rating: 4.18,
+      ratingsCount: 4200,
+      reviewsCount: 610,
+      reviews: [
+        {
+          id: '99',
+          rating: 4.5,
+          text: 'An excellent space opera.',
+          hasSpoilers: false,
+          reviewedAt: '2026-07-01T12:00:00Z',
+          likesCount: 42,
+          reviewer: 'Reader One',
+        },
+        {
+          id: '100',
+          rating: undefined,
+          text: 'A thoughtful spoiler review.',
+          hasSpoilers: true,
+          reviewedAt: undefined,
+          likesCount: 3,
+          reviewer: 'reader-two',
+        },
+      ],
+    });
+    expect(axiosMock.post).toHaveBeenCalledWith(
+      'https://api.hardcover.app/v1/graphql',
+      expect.objectContaining({ variables: { bookId: 456, limit: 5 } }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer token-123' }),
+      }),
+    );
   });
 });

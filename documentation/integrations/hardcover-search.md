@@ -11,12 +11,13 @@ Some books have no audiobook edition and never surface via Audible search. When 
 - **Always-on, not a toggle:** search always queries Hardcover in parallel with Audible whenever a key is configured — originally gated on "zero Audible results," but that missed books where Audible returned unrelated results instead of zero.
 - **Uses Hardcover's Typesense-backed `search` GraphQL query** (not the list/shelf queries used for sync).
 - **Requests created from Hardcover results have no ASIN** — `request-creator.service.ts` handles `asin` as optional, matching/creating by title+author instead.
-- **Details enrichment:** `/api/audiobooks/[asin]` uses the shared key to find a conservative title/author match and adds optional page count, ISBN, and a Hardcover link. Failure or a missing key never blocks Audible details.
+- **Details enrichment:** `/api/audiobooks/[asin]` uses the shared key to find a conservative title/author match and adds optional page count, ISBN, aggregate rating, a Hardcover link, and up to five top public reviews. Reviews are ordered by likes and then recency. Failure or a missing key never blocks Audible details.
 
 ## API/Interfaces
 - `GET /api/books/search?q=<query>` — Hardcover catalog search (`src/app/api/books/search/route.ts`), reads the admin key via `configService.get('hardcover_search_api_key')`
 - `POST /api/admin/settings/ebook/test-hardcover` → `{ apiKey }` → `{ success, message }` — validates a key without saving it
-- `searchHardcoverBooks(apiToken, query, page)` (`src/lib/services/hardcover-api.service.ts`) — returns optional ISBN, page count, and slug; shared by search, connection testing, and audiobook-details enrichment
+- `searchHardcoverBooks(apiToken, query, page)` (`src/lib/services/hardcover-api.service.ts`) — returns optional ISBN, page count, rating counts, and slug; shared by search, connection testing, and audiobook-details enrichment
+- `fetchHardcoverBookCommunityDetails(apiToken, bookId, limit)` — loads the aggregate rating and top public written reviews for the matched book; review text is returned as plain text and spoiler flags are preserved for the in-app reveal control
 
 ## Related
 - [Hardcover shelf sync (personal tokens)](../backend/services/hardcover-sync.md)

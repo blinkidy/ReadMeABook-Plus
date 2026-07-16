@@ -16,6 +16,7 @@ const enrichMock = vi.hoisted(() => vi.fn());
 const currentUserMock = vi.hoisted(() => vi.fn());
 const configGetMock = vi.hoisted(() => vi.fn());
 const hardcoverSearchMock = vi.hoisted(() => vi.fn());
+const hardcoverCommunityMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/db', () => ({
   prisma: prismaMock,
@@ -47,6 +48,7 @@ vi.mock('@/lib/services/config.service', () => ({
 
 vi.mock('@/lib/services/hardcover-api.service', () => ({
   searchHardcoverBooks: hardcoverSearchMock,
+  fetchHardcoverBookCommunityDetails: hardcoverCommunityMock,
 }));
 
 describe('Audiobooks browse routes', () => {
@@ -55,6 +57,7 @@ describe('Audiobooks browse routes', () => {
     enrichMock.mockResolvedValue([]);
     currentUserMock.mockReturnValue(null);
     configGetMock.mockResolvedValue(null);
+    hardcoverCommunityMock.mockResolvedValue({ reviews: [] });
   });
 
   it('searches Audible and enriches results', async () => {
@@ -224,6 +227,20 @@ describe('Audiobooks browse routes', () => {
       }],
       found: 1,
     });
+    hardcoverCommunityMock.mockResolvedValue({
+      rating: 4.18,
+      ratingsCount: 4200,
+      reviewsCount: 610,
+      reviews: [{
+        id: '99',
+        rating: 4.5,
+        text: 'An excellent space opera.',
+        hasSpoilers: false,
+        reviewedAt: '2026-07-01T12:00:00Z',
+        likesCount: 42,
+        reviewer: 'Reader One',
+      }],
+    });
     const { GET } = await import('@/app/api/audiobooks/[asin]/route');
 
     const payload = await (await GET({} as any, { params: Promise.resolve({ asin: 'ASIN123456' }) })).json();
@@ -234,7 +251,20 @@ describe('Audiobooks browse routes', () => {
       pageCount: 336,
       slug: 'detail-book',
       url: 'https://hardcover.app/books/detail-book',
+      rating: 4.18,
+      ratingsCount: 4200,
+      reviewsCount: 610,
+      reviews: [{
+        id: '99',
+        rating: 4.5,
+        text: 'An excellent space opera.',
+        hasSpoilers: false,
+        reviewedAt: '2026-07-01T12:00:00Z',
+        likesCount: 42,
+        reviewer: 'Reader One',
+      }],
     });
+    expect(hardcoverCommunityMock).toHaveBeenCalledWith('hardcover-token', '123');
   });
 
   it('returns 400 when ASIN is invalid', async () => {

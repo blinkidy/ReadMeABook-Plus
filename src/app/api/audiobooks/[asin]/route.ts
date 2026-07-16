@@ -7,7 +7,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAudibleService } from '@/lib/integrations/audible.service';
 import { RMABLogger } from '@/lib/utils/logger';
 import { getConfigService } from '@/lib/services/config.service';
-import { searchHardcoverBooks, HardcoverSearchResult } from '@/lib/services/hardcover-api.service';
+import {
+  fetchHardcoverBookCommunityDetails,
+  searchHardcoverBooks,
+  HardcoverSearchResult,
+} from '@/lib/services/hardcover-api.service';
 
 const logger = RMABLogger.create('API.Audiobooks.Details');
 
@@ -68,12 +72,27 @@ export async function GET(
         const result = await searchHardcoverBooks(apiToken, `${audiobook.title} ${audiobook.author}`, 1);
         const match = selectHardcoverMatch(result.books, audiobook.title, audiobook.author);
         if (match) {
+          let community = null;
+          try {
+            community = await fetchHardcoverBookCommunityDetails(apiToken, match.hardcoverId);
+          } catch (error) {
+            logger.warn('Hardcover ratings and reviews enrichment failed', {
+              error: error instanceof Error ? error.message : String(error),
+              hardcoverId: match.hardcoverId,
+              asin,
+            });
+          }
+
           hardcover = {
             id: match.hardcoverId,
             isbn: match.isbn,
             pageCount: match.pageCount,
             slug: match.slug,
             url: match.slug ? `https://hardcover.app/books/${match.slug}` : `https://hardcover.app/books/${match.hardcoverId}`,
+            rating: community?.rating ?? match.rating,
+            ratingsCount: community?.ratingsCount ?? match.ratingsCount,
+            reviewsCount: community?.reviewsCount ?? match.reviewsCount,
+            reviews: community?.reviews ?? [],
           };
         }
       }

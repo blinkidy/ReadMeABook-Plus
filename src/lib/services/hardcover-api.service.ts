@@ -337,6 +337,39 @@ export interface HardcoverSearchResult {
   description?: string;
   slug?: string;
   pageCount?: number;
+  rating?: number;
+  ratingsCount?: number;
+  reviewsCount?: number;
+}
+
+export interface HardcoverReview {
+  id: string;
+  rating?: number;
+  text: string;
+  hasSpoilers: boolean;
+  reviewedAt?: string;
+  likesCount: number;
+  reviewer: string;
+}
+
+export interface HardcoverBookCommunityDetails {
+  rating?: number;
+  ratingsCount?: number;
+  reviewsCount?: number;
+  reviews: HardcoverReview[];
+}
+
+interface HardcoverCommunityReviewResponse {
+  id: number | string;
+  rating?: number | string | null;
+  review?: string | null;
+  review_has_spoilers?: boolean | null;
+  reviewed_at?: string | null;
+  likes_count?: number | string | null;
+  user?: {
+    name?: string | null;
+    username?: string | null;
+  } | null;
 }
 
 export const HARDCOVER_SEARCH_PAGE_SIZE = 20;
@@ -375,6 +408,15 @@ function extractSearchResults(results: any): HardcoverSearchResult[] {
       pageCount: [doc.pages, doc.page_count, doc.pages_count, doc.default_edition?.pages]
         .map(Number)
         .find((value) => Number.isFinite(value) && value > 0),
+      rating: [doc.rating, doc.average_rating]
+        .map(Number)
+        .find((value) => Number.isFinite(value) && value > 0),
+      ratingsCount: [doc.ratings_count, doc.ratingsCount]
+        .map(Number)
+        .find((value) => Number.isFinite(value) && value >= 0),
+      reviewsCount: [doc.reviews_count, doc.reviewsCount]
+        .map(Number)
+        .find((value) => Number.isFinite(value) && value >= 0),
     });
   }
   return books;
@@ -420,4 +462,96 @@ export async function searchHardcoverBooks(
   const found = typeof results?.found === 'number' ? results.found : books.length;
 
   return { books, found };
+}
+
+/**
+ * Fetch aggregate rating data and the most helpful public reviews for a book.
+ * Review text is returned as plain text and rendered by React, so imported
+ * markup cannot execute in ReadMeABook.
+ */
+export async function fetchHardcoverBookCommunityDetails(
+  apiToken: string,
+  bookId: string,
+  limit: number = 5,
+): Promise<HardcoverBookCommunityDetails> {
+  const numericBookId = Number(bookId);
+  if (!Number.isInteger(numericBookId) || numericBookId <= 0) {
+    throw new Error('Invalid Hardcover book ID');
+  }
+
+  const graphqlQuery = `
+    query BookCommunityDetails($bookId: Int!, $limit: Int!) {
+      books_by_pk(id: $bookId) {
+        rating
+        ratings_count
+        reviews_count
+      }
+      user_books(
+        where: {
+          book_id: { _eq: $bookId }
+          has_review: { _eq: true }
+          review: { _is_null: false }
+          privacy_setting_id: { _eq: 1 }
+        }
+        order_by: [{ likes_count: desc }, { reviewed_at: desc }]
+        limit: $limit
+      ) {
+        id
+        rating
+        review
+        review_has_spoilers
+        reviewed_at
+        likes_count
+        user {
+          name
+          username
+        }
+      }
+    }
+  `;
+
+  const response = await axios.post(
+    HARDCOVER_API_URL,
+    { query: graphqlQuery, variables: { bookId: numericBookId, limit } },
+    {
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        'Content-Type': 'application/json',
+        'User-Agent': RMAB_USER_AGENT,
+      },
+      timeout: 30000,
+    },
+  );
+
+  if (response.data?.errors) {
+    throw new Error(`Hardcover API Error: ${response.data.errors[0]?.message}`);
+  }
+
+  const book = response.data?.data?.books_by_pk;
+  const reviews: HardcoverReview[] = Array.isArray(response.data?.data?.user_books)
+    ? (response.data.data.user_books as HardcoverCommunityReviewResponse[])
+      .filter((review) => typeof review?.review === 'string' && review.review.trim())
+      .map((review): HardcoverReview => ({
+        id: String(review.id),
+        rating: Number.isFinite(Number(review.rating)) && Number(review.rating) > 0
+          ? Number(review.rating)
+          : undefined,
+        text: review.review!.trim(),
+        hasSpoilers: review.review_has_spoilers === true,
+        reviewedAt: review.reviewed_at || undefined,
+        likesCount: Number.isFinite(Number(review.likes_count)) ? Number(review.likes_count) : 0,
+        reviewer: review.user?.name || review.user?.username || 'Hardcover reader',
+      }))
+    : [];
+
+  const rating = Number(book?.rating);
+  const ratingsCount = Number(book?.ratings_count);
+  const reviewsCount = Number(book?.reviews_count);
+
+  return {
+    rating: Number.isFinite(rating) && rating > 0 ? rating : undefined,
+    ratingsCount: Number.isFinite(ratingsCount) && ratingsCount >= 0 ? ratingsCount : undefined,
+    reviewsCount: Number.isFinite(reviewsCount) && reviewsCount >= 0 ? reviewsCount : undefined,
+    reviews,
+  };
 }

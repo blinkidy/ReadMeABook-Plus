@@ -92,6 +92,27 @@ export async function processShelfBooks(
       where: { provider_externalBookId: { provider, externalBookId: book.bookId } },
     });
 
+    // EPUB shelves do not require an Audible edition. If no cached Audible
+    // mapping exists, use the provider's title/author metadata directly and
+    // let the request creator key the ebook request by title + author.
+    if (requestMediaType === 'epub' && autoRequest && !mapping?.audibleAsin) {
+      try {
+        const result = await createRequestForUser(userId, {
+          title: mapping?.title || book.title,
+          author: mapping?.author || book.author,
+          coverArtUrl: mapping?.coverUrl || book.coverUrl,
+        }, { mediaType: 'epub' });
+
+        if (result.success) {
+          stats.requestsCreated++;
+          log.info(`Created EPUB request for "${mapping?.title || book.title}" by ${mapping?.author || book.author} (no Audible ASIN required)`);
+        }
+      } catch (error) {
+        log.error(`Failed to create EPUB request for "${mapping?.title || book.title}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+      continue;
+    }
+
     if (!mapping) {
       if (!unlimitedLookups && lookupsThisCycle >= maxLookups) continue;
 
