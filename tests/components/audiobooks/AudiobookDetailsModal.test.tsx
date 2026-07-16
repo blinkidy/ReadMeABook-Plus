@@ -475,6 +475,24 @@ describe('AudiobookDetailsModal', () => {
     expect(screen.getByTestId('interactive-modal')).toHaveAttribute('data-open', 'true');
   });
 
+  it('keeps the personal ignore control available to non-admin users', async () => {
+    const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
+
+    render(
+      <AudiobookDetailsModal
+        asin="ASIN123"
+        isOpen={true}
+        onClose={vi.fn()}
+      />
+    );
+
+    await act(async () => {});
+
+    expect(screen.getByRole('button', { name: 'Ignore from Auto-Requests' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Admin' })).toBeNull();
+    expect(screen.queryByText('Admin tools')).toBeNull();
+  });
+
   it('shows request error and clears it after timeout', async () => {
     vi.useFakeTimers();
     createRequestMock.mockRejectedValueOnce(new Error('Request failed'));

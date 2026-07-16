@@ -1025,12 +1025,6 @@ export function AudiobookDetailsModal({
                       Search Ebook Sources
                     </button>
                   )}
-                  {!isLoadingIgnore && (
-                    <button type="button" onClick={handleToggleIgnore} disabled={isTogglingIgnore} className="flex items-center gap-3 rounded-xl bg-gray-200 px-4 py-3 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-300 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
-                      {isIgnored ? <EyeSlashSolidIcon className="h-5 w-5" /> : <EyeSlashIcon className="h-5 w-5" />}
-                      {isIgnored ? 'Stop Ignoring' : 'Ignore from Auto-Requests'}
-                    </button>
-                  )}
                 </div>
               </div>
             )}
@@ -1040,12 +1034,27 @@ export function AudiobookDetailsModal({
                 <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11V7a5 5 0 0110 0v4m-11 0h12a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1v-8a1 1 0 011-1z" /></svg>
                 <span className="truncate">Request handling follows your server&apos;s approval settings.</span>
               </span>
-              {user?.role === 'admin' && (
-                <button type="button" onClick={() => setShowAdminTools((show) => !show)} className="flex flex-shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-gray-800 dark:hover:text-gray-200" aria-expanded={showAdminTools} aria-controls="audiobook-admin-tools">
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.6 3.2l.5 1.6a7.5 7.5 0 013.8 0l.5-1.6 2.1.9-.8 1.5a7.4 7.4 0 012.7 2.7l1.5-.8.9 2.1-1.6.5a7.5 7.5 0 010 3.8l1.6.5-.9 2.1-1.5-.8a7.4 7.4 0 01-2.7 2.7l.8 1.5-2.1.9-.5-1.6a7.5 7.5 0 01-3.8 0l-.5 1.6-2.1-.9.8-1.5a7.4 7.4 0 01-2.7-2.7l-1.5.8-.9-2.1 1.6-.5a7.5 7.5 0 010-3.8l-1.6-.5.9-2.1 1.5.8a7.4 7.4 0 012.7-2.7l-.8-1.5 2.1-.9zM12 9a3 3 0 100 6 3 3 0 000-6z" /></svg>
-                  Admin
-                </button>
-              )}
+              <span className="flex flex-shrink-0 items-center gap-1">
+                {user && !isLoadingIgnore && (
+                  <button
+                    type="button"
+                    onClick={handleToggleIgnore}
+                    disabled={isTogglingIgnore}
+                    aria-label={isIgnored ? 'Stop Ignoring' : 'Ignore from Auto-Requests'}
+                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                    title={isIgnored ? 'Stop ignoring — shelf auto-requests will resume for this book' : 'Ignore this book from shelf auto-requests'}
+                  >
+                    {isIgnored ? <EyeSlashSolidIcon className="h-5 w-5" /> : <EyeSlashIcon className="h-5 w-5" />}
+                    <span className="hidden sm:inline">{isIgnored ? 'Stop Ignoring' : 'Ignore'}</span>
+                  </button>
+                )}
+                {user?.role === 'admin' && (
+                  <button type="button" onClick={() => setShowAdminTools((show) => !show)} className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-gray-800 dark:hover:text-gray-200" aria-expanded={showAdminTools} aria-controls="audiobook-admin-tools">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.6 3.2l.5 1.6a7.5 7.5 0 013.8 0l.5-1.6 2.1.9-.8 1.5a7.4 7.4 0 012.7 2.7l1.5-.8.9 2.1-1.6.5a7.5 7.5 0 010 3.8l1.6.5-.9 2.1-1.5-.8a7.4 7.4 0 01-2.7 2.7l.8 1.5-2.1.9-.5-1.6a7.5 7.5 0 01-3.8 0l-.5 1.6-2.1-.9.8-1.5a7.4 7.4 0 01-2.7-2.7l-1.5.8-.9-2.1 1.6-.5a7.5 7.5 0 010-3.8l-1.6-.5.9-2.1 1.5.8a7.4 7.4 0 012.7-2.7l-.8-1.5 2.1-.9zM12 9a3 3 0 100 6 3 3 0 000-6z" /></svg>
+                    Admin
+                  </button>
+                )}
+              </span>
             </div>
           </div>
         )}
