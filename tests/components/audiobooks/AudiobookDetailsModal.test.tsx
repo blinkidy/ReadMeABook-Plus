@@ -110,6 +110,27 @@ describe('AudiobookDetailsModal', () => {
         pageCount: 336,
         isbn: '9780000000001',
         url: 'https://hardcover.app/books/detail-book',
+        rating: 4.18,
+        ratingsCount: 4200,
+        reviewsCount: 610,
+        reviews: [
+          {
+            id: 'review-1',
+            rating: 4.5,
+            text: 'An excellent space opera.',
+            hasSpoilers: false,
+            likesCount: 42,
+            reviewer: 'Reader One',
+          },
+          {
+            id: 'review-2',
+            rating: 4,
+            text: 'The ending changes everything.',
+            hasSpoilers: true,
+            likesCount: 7,
+            reviewer: 'Reader Two',
+          },
+        ],
       },
       audibleBaseUrl: 'https://www.audible.com',
       isLoading: false,
@@ -126,6 +147,17 @@ describe('AudiobookDetailsModal', () => {
       'href',
       'https://hardcover.app/books/detail-book',
     );
+    expect(screen.getByLabelText('Audible rating 4.2 out of 5')).toBeInTheDocument();
+    expect(screen.getByLabelText('Hardcover rating 4.2 out of 5')).toBeInTheDocument();
+
+    const reviewsToggle = screen.getByRole('button', { name: /Hardcover Reviews/i });
+    expect(reviewsToggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(reviewsToggle);
+    expect(reviewsToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('An excellent space opera.')).toBeInTheDocument();
+    expect(screen.queryByText('The ending changes everything.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /contains spoilers/i }));
+    expect(screen.getByText('The ending changes everything.')).toBeInTheDocument();
   });
 
   it('creates requests and auto-closes after success', async () => {

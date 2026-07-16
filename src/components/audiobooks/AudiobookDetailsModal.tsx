@@ -112,6 +112,8 @@ export function AudiobookDetailsModal({
   const [isTogglingIgnore, setIsTogglingIgnore] = useState(false);
   const [requestFormat, setRequestFormat] = useState<RequestFormat>('audiobook');
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [reviewsExpanded, setReviewsExpanded] = useState(false);
+  const [revealedSpoilerReviews, setRevealedSpoilerReviews] = useState<Set<string>>(new Set());
   const descriptionRef = useRef<HTMLParagraphElement>(null);
   // Real overflow detection instead of a character-count guess, since the same
   // text wraps into more lines on narrower (mobile) viewports.
@@ -128,6 +130,8 @@ export function AudiobookDetailsModal({
   // Collapse the summary again when a different book's details are opened
   useEffect(() => {
     setDescriptionExpanded(false);
+    setReviewsExpanded(false);
+    setRevealedSpoilerReviews(new Set());
   }, [asin]);
 
   const effectiveStatus = localRequestStatus;
@@ -414,13 +418,29 @@ export function AudiobookDetailsModal({
                       />
                     )}
 
-                    {/* Rating Badge */}
-                    {audiobook.rating && audiobook.rating > 0 && (
-                      <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-sm text-white text-xs font-medium">
-                        <svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        <span>{audiobook.rating.toFixed(1)}</span>
+                    {/* Audible + Hardcover rating badges */}
+                    {((audiobook.rating && audiobook.rating > 0) || (hardcover?.rating && hardcover.rating > 0)) && (
+                      <div className="absolute top-2 left-2 right-2 flex flex-wrap items-center gap-1.5">
+                        {audiobook.rating && audiobook.rating > 0 && (
+                          <div
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-black/70 backdrop-blur-sm text-white text-[11px] font-semibold shadow-sm"
+                            title="Audible rating"
+                            aria-label={`Audible rating ${audiobook.rating.toFixed(1)} out of 5`}
+                          >
+                            <span className="text-amber-400" aria-hidden="true">★</span>
+                            <span>Aud {audiobook.rating.toFixed(1)}</span>
+                          </div>
+                        )}
+                        {hardcover?.rating && hardcover.rating > 0 && (
+                          <div
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-700/90 backdrop-blur-sm text-white text-[11px] font-semibold shadow-sm"
+                            title="Hardcover rating"
+                            aria-label={`Hardcover rating ${hardcover.rating.toFixed(1)} out of 5`}
+                          >
+                            <span className="text-amber-300" aria-hidden="true">★</span>
+                            <span>HC {hardcover.rating.toFixed(1)}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -594,6 +614,79 @@ export function AudiobookDetailsModal({
                       {aiReason}
                     </p>
                   </div>
+                </div>
+              )}
+
+              {/* Hardcover Reviews */}
+              {hardcover?.reviews && hardcover.reviews.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700/50">
+                  <button
+                    type="button"
+                    onClick={() => setReviewsExpanded((expanded) => !expanded)}
+                    className="w-full flex items-center justify-between gap-4 text-left group"
+                    aria-expanded={reviewsExpanded}
+                    aria-controls="hardcover-reviews"
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Hardcover Reviews
+                      </span>
+                      <span className="block mt-1 text-sm text-gray-600 dark:text-gray-300">
+                        {hardcover.rating ? `${hardcover.rating.toFixed(1)} average` : 'Reader reviews'}
+                        {hardcover.ratingsCount !== undefined ? ` from ${hardcover.ratingsCount.toLocaleString()} ratings` : ''}
+                        {' · '}{hardcover.reviews.length} top {hardcover.reviews.length === 1 ? 'review' : 'reviews'}
+                      </span>
+                    </span>
+                    <svg
+                      className={`w-5 h-5 flex-shrink-0 text-gray-500 transition-transform ${reviewsExpanded ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {reviewsExpanded && (
+                    <div id="hardcover-reviews" className="mt-4 space-y-3">
+                      {hardcover.reviews.map((review) => {
+                        const spoilerRevealed = !review.hasSpoilers || revealedSpoilerReviews.has(review.id);
+                        return (
+                          <article
+                            key={review.id}
+                            className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/60"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                              <span className="font-semibold text-gray-900 dark:text-gray-100">{review.reviewer}</span>
+                              <span className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+                                {review.rating && (
+                                  <span aria-label={`${review.rating.toFixed(1)} out of 5 stars`}>
+                                    <span className="text-amber-500" aria-hidden="true">★</span> {review.rating.toFixed(1)}
+                                  </span>
+                                )}
+                                {review.likesCount > 0 && <span>{review.likesCount.toLocaleString()} likes</span>}
+                              </span>
+                            </div>
+
+                            {spoilerRevealed ? (
+                              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                                {review.text}
+                              </p>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setRevealedSpoilerReviews((revealed) => new Set(revealed).add(review.id))}
+                                className="mt-3 w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-3 text-sm font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                              >
+                                This review contains spoilers — click to reveal
+                              </button>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 

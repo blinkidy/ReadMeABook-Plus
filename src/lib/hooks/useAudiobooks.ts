@@ -47,6 +47,18 @@ export interface HardcoverBookMetadata {
   pageCount?: number;
   slug?: string;
   url: string;
+  rating?: number;
+  ratingsCount?: number;
+  reviewsCount?: number;
+  reviews: Array<{
+    id: string;
+    rating?: number;
+    text: string;
+    hasSpoilers: boolean;
+    reviewedAt?: string;
+    likesCount: number;
+    reviewer: string;
+  }>;
 }
 
 export function useAudiobooks(
