@@ -142,18 +142,23 @@
   - Login/requests wording expects broader book language.
   - Setup path tests treat invalid templates as failed path validation.
 
-## Verification State From Implementation Session
-- `git diff --check` passed with only LF/CRLF warnings.
-- Full verification could not run because dependencies were missing.
-- `npm run test -- request-creator-ignore.test.ts` failed: `vitest` not installed.
-- `npx tsc --noEmit` fetched old `tsc@2.0.4` because local TypeScript was missing.
-- `npm install` failed with `ENOSPC: no space left on device`.
-- Partial `node_modules` from the failed install was removed.
-- `package-lock.json` was not modified during the failed install.
+## Upstream v1.2.2 Integration
+- Integrated official ReadMeABook `v1.2.2` while preserving Plus's first-class EPUB, BookOrbit, Hardcover, BookDate, and custom request UI behavior.
+- Interactive Search can advance an existing audiobook request instead of creating a duplicate for supported statuses.
+  - Plus keeps Interactive Search inside the admin disclosure.
+  - Request routing uses the audiobook-specific status so an EPUB request cannot be mistaken for the audiobook request being advanced.
+- Author matching now preserves CamelCase boundaries before normalization.
+- Download relocation checks normalize Windows and POSIX separators through `PathMapper.normalizePath()`.
+- Audible series scraping supports both modern web-component and legacy list layouts.
+  - The extracted parser retains Plus's all-narrator capture behavior.
+- Application/package version is `1.2.2`.
 
-## Important Follow-Up
-- Free disk space, then run:
-  - `npm install`
-  - `npm run test`
-  - `docker compose build readmeabook`
-- After tests/build pass, update this file if behavior or setup changes further.
+## Current Verification State
+- `git diff --check HEAD` passes.
+- Full Vitest suite passes: 218 files, 2,697 tests; 4 existing integration tests skipped.
+- `tsc --noEmit` passes.
+- `npm run build` passes.
+- The deployment `docker-compose.yml` pulls GHCR and therefore reports `No services to build`.
+- The actual source image build passes with:
+  - `docker compose -f docker-compose.local.yml build readmeabook`
+  - Local unified-image manifest: `sha256:1bb234ca153ae3d30badf97397471dae09a02b41f4328328f4b0600817928d7d`.

@@ -24,6 +24,7 @@ import { EyeSlashIcon as EyeSlashSolidIcon } from '@heroicons/react/24/solid';
 import { fetchWithAuth } from '@/lib/utils/api';
 import { useIsIgnored, useToggleIgnore } from '@/lib/hooks/useIgnoredAudiobooks';
 import { useIsClamped } from '@/lib/hooks/useIsClamped';
+import { ADVANCEABLE_FROM_INTERACTIVE_SEARCH } from '@/lib/constants/request-statuses';
 
 interface AudiobookDetailsModalProps {
   asin: string;
@@ -36,6 +37,10 @@ interface AudiobookDetailsModalProps {
   requestStatus?: string | null;
   isAvailable?: boolean;
   requestedByUsername?: string | null;
+  /** In-flight request id for this audiobook (own or other user's). When set together with an advanceable status and own/admin viewer, Interactive Search → Download routes through select-torrent instead of creating a new request. */
+  requestId?: string | null;
+  /** Owner of the in-flight request (matcher-populated). Used together with the viewer's id/role to gate advance-vs-create routing. */
+  requestedByUserId?: string | null;
   hideRequestActions?: boolean;
   hasReportedIssue?: boolean;
   aiReason?: string | null;
@@ -263,6 +268,8 @@ export function AudiobookDetailsModal({
   requestStatus = null,
   isAvailable = false,
   requestedByUsername = null,
+  requestId = null,
+  requestedByUserId = null,
   hideRequestActions = false,
   hasReportedIssue = false,
   aiReason = null,
@@ -273,7 +280,7 @@ export function AudiobookDetailsModal({
   const { audiobook, hardcover, audibleBaseUrl, isLoading, error } = useAudiobookDetails(isOpen ? asin : null);
   const { createRequest, isLoading: isRequesting } = useCreateRequest();
   const { ebookStatus, revalidate: revalidateEbookStatus } = useEbookStatus(isOpen ? asin : null);
-  const { downloadAvailable, requestId } = useDownloadStatus(isOpen ? asin : null);
+  const { downloadAvailable, requestId: downloadRequestId } = useDownloadStatus(isOpen ? asin : null);
 
   const { isIgnored, ignoredId, isLoading: isLoadingIgnore } = useIsIgnored(isOpen ? asin : null);
   const { addIgnore, removeIgnore } = useToggleIgnore();
@@ -334,6 +341,15 @@ export function AudiobookDetailsModal({
     ...(canRequestAudiobook && canRequestEbook ? ['both' as const] : []),
   ], [canRequestAudiobook, canRequestEbook]);
   const canRequestSelectedFormat = requestableFormats.includes(requestFormat);
+
+  // Advance the existing request via select-torrent (instead of creating a new one)
+  // only when the viewer owns the request, or is admin, AND the status is one we route on.
+  // Outside this predicate the search modal falls back to today's "create new request" path.
+  const shouldAdvance = !!requestId
+    && !!user
+    && (requestedByUserId === user.id || user.role === 'admin')
+    && (ADVANCEABLE_FROM_INTERACTIVE_SEARCH as readonly string[]).includes(audiobookEffectiveStatus ?? '');
+  const advanceRequestId = shouldAdvance ? requestId ?? undefined : undefined;
 
   useEffect(() => {
     setMounted(true);
@@ -413,10 +429,10 @@ export function AudiobookDetailsModal({
   };
 
   const handleDownload = async () => {
-    if (!requestId) return;
+    if (!downloadRequestId) return;
     setIsDownloading(true);
     try {
-      const res = await fetchWithAuth(`/api/requests/${requestId}/download-token`, { method: 'POST' });
+      const res = await fetchWithAuth(`/api/requests/${downloadRequestId}/download-token`, { method: 'POST' });
       if (!res.ok) throw new Error('Failed to get download link');
       const { downloadUrl } = await res.json();
       window.location.href = downloadUrl;
@@ -927,7 +943,7 @@ export function AudiobookDetailsModal({
                   )}
 
                   {/* Download Link - subtle utility, visible from any context */}
-                  {isAvailable && downloadAvailable && requestId && user?.permissions?.download !== false && (
+                  {isAvailable && downloadAvailable && downloadRequestId && user?.permissions?.download !== false && (
                     <div>
                       <p className="text-gray-500 dark:text-gray-400">Download</p>
                       <button
@@ -1178,6 +1194,7 @@ export function AudiobookDetailsModal({
             onSuccess={() => {
               onRequestSuccess?.();
             }}
+            requestId={advanceRequestId}
             audiobook={{
               title: audiobook.title,
               author: audiobook.author,

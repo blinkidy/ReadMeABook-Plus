@@ -196,6 +196,8 @@ export function AudiobookCard({
         requestStatus={displayAudiobook.requestStatus}
         isAvailable={audiobook.isAvailable}
         requestedByUsername={audiobook.requestedByUsername}
+        requestId={audiobook.requestId}
+        requestedByUserId={audiobook.requestedByUserId}
         hasReportedIssue={audiobook.hasReportedIssue}
       />
     </>
