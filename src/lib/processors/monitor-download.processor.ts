@@ -129,8 +129,9 @@ export async function processMonitorDownload(payload: MonitorDownloadPayload): P
       if (info.savePath && downloadPath) {
         const normalizedSave = PathMapper.normalizePath(info.savePath);
         const normalizedDownload = PathMapper.normalizePath(downloadPath);
+        const savePathPrefix = normalizedSave === '/' ? '/' : `${normalizedSave}/`;
         const isRelocated = normalizedDownload === normalizedSave
-          || normalizedDownload.startsWith(normalizedSave + '/');
+          || normalizedDownload.startsWith(savePathPrefix);
         if (!isRelocated) {
           const waitCount = (prevPathWaitCount ?? 0) + 1;
           const MAX_PATH_WAIT = 30; // Give up after ~5 minutes

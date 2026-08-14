@@ -69,6 +69,29 @@ describe('GET /api/audiobooks/[asin]/ebook-status', () => {
     expect(audiobookLookup.select).toMatchObject({ id: true, status: true, userId: true });
   });
 
+  it('returns a failed audiobook request for advancement without marking it active', async () => {
+    prismaMock.audiobook.findFirst.mockResolvedValue({
+      id: 'audiobook-1',
+      title: 'Book',
+      author: 'Author',
+      narrator: null,
+    });
+    prismaMock.request.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'failed-audiobook-request', status: 'failed', userId: 'audio-owner' });
+
+    const { GET } = await import('@/app/api/audiobooks/[asin]/ebook-status/route');
+    const response = await GET({} as any, { params: Promise.resolve({ asin: 'B012345678' }) });
+    const payload = await response.json();
+
+    expect(payload).toMatchObject({
+      hasActiveAudiobookRequest: false,
+      existingAudiobookStatus: 'failed',
+      existingAudiobookRequestId: 'failed-audiobook-request',
+      existingAudiobookRequestedByUserId: 'audio-owner',
+    });
+  });
+
   it('returns null audiobook request identity when the ASIN has no audiobook record', async () => {
     prismaMock.audiobook.findFirst.mockResolvedValue(null);
     prismaMock.audibleCache.findUnique.mockResolvedValue({

@@ -185,6 +185,8 @@ export async function GET(
       const audiobookAvailable = !!audioLibraryMatch ||
         existingAudiobookRequest?.status === 'available' ||
         existingAudiobookRequest?.status === 'downloaded';
+      const hasActiveAudiobookRequest = !!existingAudiobookRequest &&
+        existingAudiobookRequest.status !== 'failed';
 
       return NextResponse.json({
         ebookSourcesEnabled,
@@ -193,7 +195,7 @@ export async function GET(
         existingEbookRequestId: existingEbookRequest?.id || null,
         ebookAvailable,
         audiobookAvailable,
-        hasActiveAudiobookRequest: !!existingAudiobookRequest,
+        hasActiveAudiobookRequest,
         existingAudiobookStatus: existingAudiobookRequest?.status || null,
         existingAudiobookRequestId: existingAudiobookRequest?.id || null,
         existingAudiobookRequestedByUserId: existingAudiobookRequest?.userId || null,

@@ -640,6 +640,26 @@ describe('processMonitorDownload', () => {
     );
   });
 
+  it('treats a completed child of the POSIX root save path as relocated (#209)', async () => {
+    downloadClientManagerMock.getClientServiceForProtocol.mockResolvedValue(
+      relocationClientMock('/', '/Book')
+    );
+    stubCompletionDeps();
+
+    const { processMonitorDownload } = await import('@/lib/processors/monitor-download.processor');
+    const result = await processMonitorDownload({
+      requestId: 'req-reloc',
+      downloadHistoryId: 'dh-reloc',
+      downloadClientId: 'hash-reloc',
+      downloadClient: 'qbittorrent',
+      jobId: 'job-reloc',
+    });
+
+    expect(result.completed).toBe(true);
+    expect(jobQueueMock.addOrganizeJob).toHaveBeenCalledWith('req-reloc', 'a-reloc', '/Book');
+    expect(jobQueueMock.addMonitorJob).not.toHaveBeenCalled();
+  });
+
   it('treats an exact-equal single-file path as relocated (#209)', async () => {
     downloadClientManagerMock.getClientServiceForProtocol.mockResolvedValue(
       relocationClientMock('E:\\Torrents\\ReadMeABook\\Book.m4b', 'E:\\Torrents\\ReadMeABook\\Book.m4b')
