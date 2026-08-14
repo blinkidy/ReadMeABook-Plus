@@ -24,6 +24,7 @@ import { EyeSlashIcon as EyeSlashSolidIcon } from '@heroicons/react/24/solid';
 import { fetchWithAuth } from '@/lib/utils/api';
 import { useIsIgnored, useToggleIgnore } from '@/lib/hooks/useIgnoredAudiobooks';
 import { useIsClamped } from '@/lib/hooks/useIsClamped';
+import { ADVANCEABLE_FROM_INTERACTIVE_SEARCH } from '@/lib/constants/request-statuses';
 
 interface AudiobookDetailsModalProps {
   asin: string;
@@ -273,7 +274,7 @@ export function AudiobookDetailsModal({
   const { audiobook, hardcover, audibleBaseUrl, isLoading, error } = useAudiobookDetails(isOpen ? asin : null);
   const { createRequest, isLoading: isRequesting } = useCreateRequest();
   const { ebookStatus, revalidate: revalidateEbookStatus } = useEbookStatus(isOpen ? asin : null);
-  const { downloadAvailable, requestId } = useDownloadStatus(isOpen ? asin : null);
+  const { downloadAvailable, requestId: downloadRequestId } = useDownloadStatus(isOpen ? asin : null);
 
   const { isIgnored, ignoredId, isLoading: isLoadingIgnore } = useIsIgnored(isOpen ? asin : null);
   const { addIgnore, removeIgnore } = useToggleIgnore();
@@ -334,6 +335,17 @@ export function AudiobookDetailsModal({
     ...(canRequestAudiobook && canRequestEbook ? ['both' as const] : []),
   ], [canRequestAudiobook, canRequestEbook]);
   const canRequestSelectedFormat = requestableFormats.includes(requestFormat);
+
+  // The format-aware endpoint supplies one authoritative audiobook tuple. Never
+  // combine the caller's latest request row (which may be an ebook) with this
+  // audiobook status when deciding which request select-torrent should advance.
+  const shouldAdvance = !!ebookStatus?.existingAudiobookRequestId
+    && !!user
+    && (ebookStatus.existingAudiobookRequestedByUserId === user.id || user.role === 'admin')
+    && (ADVANCEABLE_FROM_INTERACTIVE_SEARCH as readonly string[]).includes(ebookStatus.existingAudiobookStatus ?? '');
+  const advanceRequestId = shouldAdvance
+    ? ebookStatus?.existingAudiobookRequestId ?? undefined
+    : undefined;
 
   useEffect(() => {
     setMounted(true);
@@ -413,10 +425,10 @@ export function AudiobookDetailsModal({
   };
 
   const handleDownload = async () => {
-    if (!requestId) return;
+    if (!downloadRequestId) return;
     setIsDownloading(true);
     try {
-      const res = await fetchWithAuth(`/api/requests/${requestId}/download-token`, { method: 'POST' });
+      const res = await fetchWithAuth(`/api/requests/${downloadRequestId}/download-token`, { method: 'POST' });
       if (!res.ok) throw new Error('Failed to get download link');
       const { downloadUrl } = await res.json();
       window.location.href = downloadUrl;
@@ -927,7 +939,7 @@ export function AudiobookDetailsModal({
                   )}
 
                   {/* Download Link - subtle utility, visible from any context */}
-                  {isAvailable && downloadAvailable && requestId && user?.permissions?.download !== false && (
+                  {isAvailable && downloadAvailable && downloadRequestId && user?.permissions?.download !== false && (
                     <div>
                       <p className="text-gray-500 dark:text-gray-400">Download</p>
                       <button
@@ -1178,6 +1190,7 @@ export function AudiobookDetailsModal({
             onSuccess={() => {
               onRequestSuccess?.();
             }}
+            requestId={advanceRequestId}
             audiobook={{
               title: audiobook.title,
               author: audiobook.author,

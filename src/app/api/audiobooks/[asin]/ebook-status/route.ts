@@ -11,6 +11,7 @@ import { requireAuth, AuthenticatedRequest } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/db';
 import { RMABLogger } from '@/lib/utils/logger';
 import { findBookOrbitMatch } from '@/lib/utils/audiobook-matcher';
+import { ADVANCEABLE_FROM_INTERACTIVE_SEARCH } from '@/lib/constants/request-statuses';
 
 const logger = RMABLogger.create('API.Audiobooks.EbookStatus');
 
@@ -24,6 +25,14 @@ const ACTIVE_EBOOK_STATUSES = [
   'downloaded',
   'available',
 ];
+
+// The format-aware response also supplies the authoritative audiobook request
+// tuple used by Interactive Search. Include every state that can be advanced,
+// even when that state is not considered an active ebook state.
+const RELEVANT_AUDIOBOOK_STATUSES = Array.from(new Set([
+  ...ACTIVE_EBOOK_STATUSES,
+  ...ADVANCEABLE_FROM_INTERACTIVE_SEARCH,
+]));
 
 /**
  * GET /api/audiobooks/[asin]/ebook-status
@@ -113,6 +122,8 @@ export async function GET(
           audiobookAvailable: !!audioLibraryMatch,
           hasActiveAudiobookRequest: false,
           existingAudiobookStatus: null,
+          existingAudiobookRequestId: null,
+          existingAudiobookRequestedByUserId: null,
         });
       }
 
@@ -141,11 +152,12 @@ export async function GET(
             audiobookId: audiobook.id,
             type: 'audiobook',
             deletedAt: null,
-            status: { in: ACTIVE_EBOOK_STATUSES },
+            status: { in: RELEVANT_AUDIOBOOK_STATUSES },
           },
           select: {
             id: true,
             status: true,
+            userId: true,
           },
           orderBy: { createdAt: 'desc' },
         }),
@@ -173,6 +185,8 @@ export async function GET(
       const audiobookAvailable = !!audioLibraryMatch ||
         existingAudiobookRequest?.status === 'available' ||
         existingAudiobookRequest?.status === 'downloaded';
+      const hasActiveAudiobookRequest = !!existingAudiobookRequest &&
+        existingAudiobookRequest.status !== 'failed';
 
       return NextResponse.json({
         ebookSourcesEnabled,
@@ -181,8 +195,10 @@ export async function GET(
         existingEbookRequestId: existingEbookRequest?.id || null,
         ebookAvailable,
         audiobookAvailable,
-        hasActiveAudiobookRequest: !!existingAudiobookRequest,
+        hasActiveAudiobookRequest,
         existingAudiobookStatus: existingAudiobookRequest?.status || null,
+        existingAudiobookRequestId: existingAudiobookRequest?.id || null,
+        existingAudiobookRequestedByUserId: existingAudiobookRequest?.userId || null,
       });
 
     } catch (error) {

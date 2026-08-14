@@ -591,6 +591,8 @@ export interface EbookStatus {
   audiobookAvailable: boolean;
   hasActiveAudiobookRequest: boolean;
   existingAudiobookStatus: string | null;
+  existingAudiobookRequestId: string | null;
+  existingAudiobookRequestedByUserId: string | null;
 }
 
 export function useEbookStatus(asin: string | null) {
