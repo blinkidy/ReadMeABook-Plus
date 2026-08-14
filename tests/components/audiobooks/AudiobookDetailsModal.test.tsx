@@ -622,8 +622,27 @@ describe('AudiobookDetailsModal', () => {
       requestStatus?: string | null;
       requestId?: string | null;
       requestedByUserId?: string | null;
+      audiobookStatus?: string | null;
+      audiobookRequestId?: string | null;
+      audiobookRequestedByUserId?: string | null;
     }) => {
       useAuthMock.mockReturnValue({ user: props.user });
+      useEbookStatusMock.mockReturnValue({
+        ebookStatus: {
+          ebookSourcesEnabled: true,
+          hasActiveEbookRequest: false,
+          existingEbookStatus: null,
+          existingEbookRequestId: null,
+          ebookAvailable: false,
+          audiobookAvailable: false,
+          hasActiveAudiobookRequest: true,
+          existingAudiobookStatus: props.audiobookStatus ?? props.requestStatus ?? null,
+          existingAudiobookRequestId: props.audiobookRequestId ?? props.requestId ?? null,
+          existingAudiobookRequestedByUserId:
+            props.audiobookRequestedByUserId ?? props.requestedByUserId ?? null,
+        },
+        revalidate: revalidateEbookStatusMock,
+      });
       const { AudiobookDetailsModal } = await import('@/components/audiobooks/AudiobookDetailsModal');
 
       render(
@@ -632,8 +651,6 @@ describe('AudiobookDetailsModal', () => {
           isOpen={true}
           onClose={vi.fn()}
           requestStatus={props.requestStatus ?? null}
-          requestId={props.requestId ?? null}
-          requestedByUserId={props.requestedByUserId ?? null}
         />
       );
 
@@ -690,6 +707,19 @@ describe('AudiobookDetailsModal', () => {
         requestedByUserId: 'user-1',
       });
       expect(forwarded).toBe('req-from-user-1');
+    });
+
+    it('uses the format-aware audiobook request tuple instead of the caller row status', async () => {
+      const forwarded = await openInteractiveAndReadForwardedRequestId({
+        user: { id: 'admin-1', username: 'admin', role: 'admin' },
+        requestStatus: 'pending',
+        requestId: 'ebook-request',
+        requestedByUserId: 'ebook-owner',
+        audiobookStatus: 'awaiting_search',
+        audiobookRequestId: 'audiobook-request',
+        audiobookRequestedByUserId: 'audiobook-owner',
+      });
+      expect(forwarded).toBe('audiobook-request');
     });
 
     it('does NOT forward requestId when caller omits requestId entirely', async () => {

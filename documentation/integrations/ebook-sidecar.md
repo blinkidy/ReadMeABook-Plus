@@ -14,6 +14,7 @@ Ebooks are first-class citizens in RMAB, with their own request type, tracking, 
 - **UI Badge:** Orange (#f16f19) ebook badge to distinguish from audiobooks
 - **Separate Tracking:** Own progress, status, and error handling
 - **Format-aware modal actions:** The details modal presents Audiobook, eBook (EPUB), and Both formats as responsive selection cards. Already-owned formats are disabled, Both is available only when neither format exists, and the selector is hidden when both formats are owned. A shared `Submit Request` button submits the selected format.
+- **Format-safe Interactive Search:** The format-aware status API returns the audiobook request ID, owner, and status as one tuple. The modal advances only that request, so a newer ebook row can never be sent to the audiobook `select-torrent` route.
 
 ### Source Priority
 1. **Anna's Archive** (if enabled) - Direct HTTP downloads

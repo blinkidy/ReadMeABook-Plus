@@ -37,10 +37,6 @@ interface AudiobookDetailsModalProps {
   requestStatus?: string | null;
   isAvailable?: boolean;
   requestedByUsername?: string | null;
-  /** In-flight request id for this audiobook (own or other user's). When set together with an advanceable status and own/admin viewer, Interactive Search → Download routes through select-torrent instead of creating a new request. */
-  requestId?: string | null;
-  /** Owner of the in-flight request (matcher-populated). Used together with the viewer's id/role to gate advance-vs-create routing. */
-  requestedByUserId?: string | null;
   hideRequestActions?: boolean;
   hasReportedIssue?: boolean;
   aiReason?: string | null;
@@ -268,8 +264,6 @@ export function AudiobookDetailsModal({
   requestStatus = null,
   isAvailable = false,
   requestedByUsername = null,
-  requestId = null,
-  requestedByUserId = null,
   hideRequestActions = false,
   hasReportedIssue = false,
   aiReason = null,
@@ -342,14 +336,16 @@ export function AudiobookDetailsModal({
   ], [canRequestAudiobook, canRequestEbook]);
   const canRequestSelectedFormat = requestableFormats.includes(requestFormat);
 
-  // Advance the existing request via select-torrent (instead of creating a new one)
-  // only when the viewer owns the request, or is admin, AND the status is one we route on.
-  // Outside this predicate the search modal falls back to today's "create new request" path.
-  const shouldAdvance = !!requestId
+  // The format-aware endpoint supplies one authoritative audiobook tuple. Never
+  // combine the caller's latest request row (which may be an ebook) with this
+  // audiobook status when deciding which request select-torrent should advance.
+  const shouldAdvance = !!ebookStatus?.existingAudiobookRequestId
     && !!user
-    && (requestedByUserId === user.id || user.role === 'admin')
-    && (ADVANCEABLE_FROM_INTERACTIVE_SEARCH as readonly string[]).includes(audiobookEffectiveStatus ?? '');
-  const advanceRequestId = shouldAdvance ? requestId ?? undefined : undefined;
+    && (ebookStatus.existingAudiobookRequestedByUserId === user.id || user.role === 'admin')
+    && (ADVANCEABLE_FROM_INTERACTIVE_SEARCH as readonly string[]).includes(ebookStatus.existingAudiobookStatus ?? '');
+  const advanceRequestId = shouldAdvance
+    ? ebookStatus?.existingAudiobookRequestId ?? undefined
+    : undefined;
 
   useEffect(() => {
     setMounted(true);
