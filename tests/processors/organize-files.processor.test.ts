@@ -20,6 +20,9 @@ const configMock = vi.hoisted(() => ({
 const formatCoercionMock = vi.hoisted(() => ({
   coerceToPlexCompatible: vi.fn(),
 }));
+const audibleServiceMock = vi.hoisted(() => ({
+  getAudiobookDetails: vi.fn(),
+}));
 
 vi.mock('@/lib/db', () => ({
   prisma: prismaMock,
@@ -43,6 +46,10 @@ vi.mock('@/lib/services/job-queue.service', () => ({
 
 vi.mock('@/lib/utils/format-coercion', () => formatCoercionMock);
 
+vi.mock('@/lib/integrations/audible.service', () => ({
+  getAudibleService: () => audibleServiceMock,
+}));
+
 describe('processOrganizeFiles', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -59,6 +66,7 @@ describe('processOrganizeFiles', () => {
       errors: [],
       finalAudioFiles: paths,
     }));
+    audibleServiceMock.getAudiobookDetails.mockResolvedValue(null);
   });
 
   it('organizes files and triggers filesystem scan when enabled', async () => {
@@ -70,6 +78,9 @@ describe('processOrganizeFiles', () => {
       narrator: null,
       coverArtUrl: null,
       audibleAsin: 'ASIN1',
+      year: 2020,
+      series: 'Test Series',
+      seriesPart: '1',
     });
     organizerMock.organize.mockResolvedValue({
       success: true,
