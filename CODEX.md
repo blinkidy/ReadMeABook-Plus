@@ -153,12 +153,21 @@
   - The extracted parser retains Plus's all-narrator capture behavior.
 - Application/package version is `1.2.2`.
 
+## Upstream v1.2.3 Integration
+- Integrated official ReadMeABook `v1.2.3` while preserving Plus's first-class EPUB, BookOrbit, Hardcover, BookDate, and custom request UI behavior.
+- Retry jobs use fair deterministic ordering, and RSS monitoring pages through the complete `awaiting_search` backlog.
+- Temporary 429/5xx grab failures try the next close-ranked release and remain retryable; Plus retains scoped grab blocklisting and type-aware re-search for permanent failures.
+- Search results are ranked before the best 100 are retained, with truncation metadata on interactive responses.
+- Request deletion uses the stored organized path instead of rebuilding it from current settings, and verifies the stored format matches the request type before deleting shared audiobook/EPUB media.
+- JWT secrets no longer use hardcoded fallbacks; non-container installs derive missing access/refresh secrets from `CONFIG_ENCRYPTION_KEY`.
+- Application/package version is `1.2.3`.
+
 ## Current Verification State
 - `git diff --check HEAD` passes.
-- Full Vitest suite passes: 218 files, 2,697 tests; 4 existing integration tests skipped.
+- Full Vitest suite passes: 220 files, 2,721 tests; 4 integration tests skipped.
 - `tsc --noEmit` passes.
 - `npm run build` passes.
 - The deployment `docker-compose.yml` pulls GHCR and therefore reports `No services to build`.
 - The actual source image build passes with:
   - `docker compose -f docker-compose.local.yml build readmeabook`
-  - Local unified-image manifest: `sha256:1bb234ca153ae3d30badf97397471dae09a02b41f4328328f4b0600817928d7d`.
+  - Local unified-image manifest: `sha256:c3449b8d39b13f1b497727e4bc8051879613699a882ccb73bd3d0346bbe412dd`.

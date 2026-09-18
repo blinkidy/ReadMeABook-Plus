@@ -12,6 +12,10 @@ import { RMABLogger } from '../utils/logger';
 import { isTransientConnectionError } from '../utils/connection-errors';
 import { addAutoBlock } from '../services/blocklist.service';
 import type { TorrentResult } from '../utils/ranking-algorithm';
+import {
+  DownloadSourceError,
+  isRetryableDownloadSourceError,
+} from '../interfaces/download-client.interface';
 
 // A fallback candidate must score within this many points of the originally
 // selected result to be attempted — keeps a bad link/indexer from silently
@@ -177,6 +181,7 @@ export async function processDownloadTorrent(payload: DownloadTorrentPayload): P
     seeders: torrent.seeders,
     format: torrent.format,
     indexer: torrent.indexer,
+    alternateCount: candidates?.length || 0,
   });
 
   const topScore = resultScore(torrent);
@@ -207,6 +212,35 @@ export async function processDownloadTorrent(payload: DownloadTorrentPayload): P
         // marks the request failed.
         logger.warn(`Download client unreachable for request ${requestId}, allowing Bull to retry`);
         throw error;
+      }
+
+      if (isRetryableDownloadSourceError(error)) {
+        const contextualError = new DownloadSourceError(
+          `Grab failed: ${candidate.indexer} returned HTTP ${error.status} while fetching "${candidate.title}" through Prowlarr`,
+          error.status,
+          error.sourceUrl,
+          error
+        );
+        const hasNextCandidate = i < attempts.length - 1;
+
+        logger.warn(
+          `${contextualError.message}${hasNextCandidate ? '; trying next ranked release' : ''}`,
+          {
+            indexer: candidate.indexer,
+            upstreamStatus: error.status,
+            candidate: i + 1,
+            candidateCount: attempts.length,
+          }
+        );
+
+        if (hasNextCandidate) {
+          lastError = contextualError;
+          continue;
+        }
+
+        // All close-scoring candidates hit temporary source failures. Let Bull
+        // retry the job rather than blocklisting releases that may recover.
+        throw contextualError;
       }
 
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
