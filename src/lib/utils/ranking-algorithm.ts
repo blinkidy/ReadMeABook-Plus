@@ -4,6 +4,7 @@
  */
 
 import { compareTwoStrings } from 'string-similarity';
+import { DEFAULT_AUDIO_CODEC_PENALTY, hasXheAacMarker } from './audio-codec';
 
 export interface TorrentResult {
   indexer: string;
@@ -37,6 +38,7 @@ export interface IndexerFlagConfig {
 }
 
 export interface RankTorrentsOptions {
+  xheAacPenalty?: number;                   // 0-100% reduction of score including bonuses
   indexerPriorities?: Map<number, number>;  // indexerId -> priority (1-25)
   flagConfigs?: IndexerFlagConfig[];         // Flag bonus configurations
   requireAuthor?: boolean;                   // Enforce author presence check (default: true)
@@ -177,6 +179,19 @@ export class RankingAlgorithm {
       }
 
       // Sum all bonus points
+      const configuredPenalty = options.xheAacPenalty ?? DEFAULT_AUDIO_CODEC_PENALTY;
+      const penalty = Number.isFinite(configuredPenalty)
+        ? Math.min(100, Math.max(0, configuredPenalty))
+        : DEFAULT_AUDIO_CODEC_PENALTY;
+      if (penalty > 0 && hasXheAacMarker(torrent.title)) {
+        const scoreBeforePenalty = baseScore + bonusModifiers.reduce((sum, mod) => sum + mod.points, 0);
+        bonusModifiers.push({
+          type: 'custom',
+          value: -penalty / 100,
+          points: -Math.max(0, scoreBeforePenalty) * penalty / 100,
+          reason: `Codec xHE-AAC / USAC (-${penalty}%)`,
+        });
+      }
       const bonusPoints = bonusModifiers.reduce((sum, mod) => sum + mod.points, 0);
 
       // Calculate final score

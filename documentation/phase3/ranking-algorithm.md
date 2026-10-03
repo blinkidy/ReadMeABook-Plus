@@ -150,6 +150,12 @@ Evaluates and scores torrents to automatically select best audiobook download.
 
 ## Bonus Points System
 
+**Audiobook codec penalty:** Settings → Indexers → Audiobook Codec Preferences.
+- Key: `indexer.xhe_aac_penalty`; percentage 0–100, default 100; 0 disables.
+- Explicit release-title markers `xHE-AAC` / `USAC` (case-insensitive; punctuation separators supported) receive one penalty after priority/flag bonuses.
+- Final score is reduced by the configured percentage; 100% gives zero and prevents automatic selection. Interactive results remain selectable.
+- Ordinary AAC, HE-AAC, bitrate, sample rate, and ebook ranking are unaffected. Undisclosed codecs cannot be detected before download.
+
 **Extensible multiplicative bonus system** for external quality factors:
 
 **Indexer Priority Bonus (configurable 1-25, default: 10)**

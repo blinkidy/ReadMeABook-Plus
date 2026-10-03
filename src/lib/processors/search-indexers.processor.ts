@@ -13,6 +13,7 @@ import { getLanguageForRegion } from '../constants/language-config';
 import { filterBlockedResults } from '../utils/filter-blocked-results';
 import { cleanIndexerSearchTitle } from '../utils/search-title';
 import type { AudibleRegion } from '../types/audible';
+import { AUDIO_CODEC_PENALTY_KEY, parseAudioCodecPenalty } from '../utils/audio-codec';
 
 const MAX_RANKED_RESULTS = 100;
 
@@ -68,6 +69,7 @@ export async function processSearchIndexers(payload: SearchIndexersPayload): Pro
     // Get flag configurations
     const flagConfigStr = await configService.get('indexer_flag_config');
     const flagConfigs = flagConfigStr ? JSON.parse(flagConfigStr) : [];
+    const xheAacPenalty = parseAudioCodecPenalty(await configService.get(AUDIO_CODEC_PENALTY_KEY));
 
     // Group indexers by their category configuration
     // This minimizes API calls while ensuring each indexer only searches its configured categories
@@ -191,6 +193,7 @@ export async function processSearchIndexers(payload: SearchIndexersPayload): Pro
     }, {
       indexerPriorities,
       flagConfigs,
+      xheAacPenalty,
       requireAuthor: true,  // Automatic mode - prevent wrong authors
       stopWords: langConfig.stopWords,
       characterReplacements: langConfig.characterReplacements,

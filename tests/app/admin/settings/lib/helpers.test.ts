@@ -301,6 +301,7 @@ describe('admin settings helpers', () => {
       (fetchWithAuthMock.mock.calls[2][1] as RequestInit).body as string
     );
     expect(optionsBody.skipUnreleased).toBe(true);
+    expect(optionsBody.xheAacPenalty).toBe(100);
   });
 
   it('saves download and paths settings', async () => {

@@ -210,6 +210,15 @@ src/app/admin/settings/
 - `{author}/{title} ({year})` → `Douglas Adams/The Hitchhiker's Guide to the Galaxy (2005)/`
 - `{author}/{narrator}/{title}` → `Douglas Adams/Stephen Fry/The Hitchhiker's Guide to the Galaxy/`
 
+## Audiobook Codec Preferences
+
+- Location: Settings → Indexers → Audiobook Codec Preferences.
+- `indexer.xhe_aac_penalty`: 0–100% final score reduction, default 100%; 0 disables.
+- Applies once to audiobook release titles labeled xHE-AAC or USAC, after priority/flag bonuses.
+- 100% excludes marked releases from automatic downloads; interactive search permits manual selection.
+- Settings API validates and persists the percentage; existing clients omitting it preserve its current value.
+- Bitrate/sample rate alone are not codec identifiers; unmarked releases cannot be detected before download.
+
 ## Filesystem Scan Trigger
 
 **Purpose:** Trigger Plex/Audiobookshelf to scan filesystem after organizing files for users with disabled filesystem watchers.

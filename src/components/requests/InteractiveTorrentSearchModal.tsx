@@ -690,7 +690,7 @@ function ResultRow({
       {/* Score Badge */}
       <div
         className={`flex-shrink-0 w-11 h-11 rounded-xl ${style.bg} flex flex-col items-center justify-center`}
-        title={`Score: ${score} (Base: ${baseScore}, Bonus: ${score - baseScore}, Match: ${Math.round(result.breakdown?.matchScore ?? 0)}, Format: ${Math.round(result.breakdown?.formatScore ?? 0)}, Size: ${Math.round(result.breakdown?.sizeScore ?? 0)}, Seeds: ${Math.round(result.breakdown?.seederScore ?? 0)})`}
+        title={`Score: ${score} (Base: ${baseScore}, Bonus: ${score - baseScore}, Match: ${Math.round(result.breakdown?.matchScore ?? 0)}, Format: ${Math.round(result.breakdown?.formatScore ?? 0)}, Size: ${Math.round(result.breakdown?.sizeScore ?? 0)}, Seeds: ${Math.round(result.breakdown?.seederScore ?? 0)})${result.bonusModifiers?.filter(modifier => modifier.type === 'custom').map(modifier => `\n${modifier.reason}`).join('') ?? ''}`}
       >
         <span className={`text-[15px] font-bold leading-none tabular-nums ${style.text}`}>
           {score}
