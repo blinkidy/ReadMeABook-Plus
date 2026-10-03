@@ -224,7 +224,10 @@ src/app/admin/settings/
 - Help text: "Only enable this if you have [Plex/Audiobookshelf]'s filesystem watcher (automatic scanning) disabled. Most users should leave this disabled and rely on [Plex/Audiobookshelf]'s built-in automatic detection."
 
 **Behavior:**
-- When enabled: After `organize_files` job completes, RMAB triggers filesystem scan in media server
+- When enabled for Plex: After `organize_files` completes, RMAB preserves the existing library refresh behavior
+- When enabled for Audiobookshelf: RMAB only considers imports placed under `media_dir`; BookOrbit-only EPUB imports outside that root are skipped
+- When the Audiobookshelf watcher is active: RMAB relies on its queued filesystem updates instead of starting a redundant full scan
+- When the Audiobookshelf watcher is disabled: RMAB debounces scans per library and runs a trailing scan when another import arrives during an active scan
 - When disabled: User relies on media server's filesystem watcher or manual scans
 - Error handling: Scan failures logged but don't fail organize job (graceful degradation)
 

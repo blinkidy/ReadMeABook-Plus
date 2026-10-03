@@ -47,7 +47,7 @@ Result: Douglas Adams/Stephen Fry/The Hitchhiker's Guide to the Galaxy/
 8. **Coerce file formats** (if enabled) - rename .mp4 → .m4b and single-file .m4a → .m4b for Plex compatibility (see: Plex Format Coercion below)
 9. **Generate file hash** - SHA256 of sorted audio filenames for library matching (see: [fixes/file-hash-matching.md](../fixes/file-hash-matching.md))
 10. Update audiobook request status to `downloaded` and store file hash in `audiobooks.files_hash`; ebook organization updates first-class ebook requests to `available`
-11. **Trigger filesystem scan** (if enabled) - tells Plex/ABS to scan for new files
+11. **Trigger filesystem scan** (if enabled and needed) - tells Plex/ABS to scan for new files
 12. Originals remain until seeding requirements met
 
 ## Filesystem Scan Triggering
@@ -61,20 +61,20 @@ Result: Douglas Adams/Stephen Fry/The Hitchhiker's Guide to the Galaxy/
 - Audiobookshelf: `audiobookshelf.trigger_scan_after_import` (boolean, default: false)
 
 **Flow:**
-1. Files organized to media directory
-2. Request status updated to `downloaded`
-3. Check config setting (backend-specific)
-4. If enabled: Call `ILibraryService.triggerLibraryScan(libraryId)`
-5. Media server scans filesystem (async operation)
-6. RMAB's scheduled check eventually detects new book
-7. Request status updates to `available`
+1. Files are organized and the request status is updated.
+2. ReadMeABook checks the backend-specific setting.
+3. Plex retains its existing refresh behavior.
+4. Audiobookshelf imports outside `media_dir` are ignored. This prevents a BookOrbit-only EPUB destination such as `/bookorbit-drop` from scanning the audiobook library.
+5. For imports inside `media_dir`, ReadMeABook checks the selected Audiobookshelf library's watcher setting. An active watcher handles the update without a redundant full scan.
+6. If the watcher is disabled, scan requests are debounced per library. An import received during a scan schedules one trailing scan after the current scan finishes.
+7. RMAB's scheduled check eventually detects the new book and updates audiobook request availability.
 
 **Implementation:**
-- Uses existing `ILibraryService` abstraction
+- Uses the existing `ILibraryService` abstraction for Plex and the Audiobookshelf API client for watcher-aware import coordination
 - `PlexLibraryService.triggerLibraryScan()` → `POST /library/sections/{id}/refresh`
-- `AudiobookshelfLibraryService.triggerLibraryScan()` → `POST /api/libraries/{id}/scan`
+- Audiobookshelf import scans read `GET /api/libraries/{id}` and, only when needed, call `POST /api/libraries/{id}/scan`
 - Called from `organize-files.processor.ts` after status update
-- Backend-agnostic using factory pattern
+- EPUBs intentionally organized inside `media_dir` remain eligible for Audiobookshelf scanning
 
 **Error Handling:**
 - Scan failures logged but don't fail organize job
