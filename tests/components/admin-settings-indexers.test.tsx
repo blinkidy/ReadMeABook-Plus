@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { IndexersTab } from '@/app/admin/settings/tabs/IndexersTab';
 import type { Settings, SavedIndexerConfig } from '@/app/admin/settings/lib/types';
 import { IndexerFlagConfig } from '@/lib/utils/ranking-algorithm';
@@ -148,6 +148,21 @@ describe('IndexersTab - Auto-load Indexers on Tab Activation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('shows the default codec penalty and allows disabling it', () => {
+    const onChange = vi.fn();
+    render(
+      <IndexersTab settings={mockSettings} originalSettings={mockSettings}
+        indexers={[]} flagConfigs={[]} onChange={onChange}
+        onIndexersChange={vi.fn()} onFlagConfigsChange={vi.fn()} onValidationChange={vi.fn()} />
+    );
+    const input = screen.getByLabelText('xHE-AAC / USAC score penalty (%)');
+    expect(input).toHaveValue(100);
+    fireEvent.change(input, { target: { value: '0' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      indexerOptions: { skipUnreleased: true, xheAacPenalty: 0 },
+    }));
   });
 
   it('should display empty indexers when no indexers are loaded', () => {

@@ -82,6 +82,7 @@ export interface ProwlarrSettings {
  * Persisted via `/api/admin/settings/indexer-options`.
  */
 export interface IndexerOptionsSettings {
+  xheAacPenalty?: number;
   /**
    * When true, automatic indexer searches skip books whose release date is
    * in the future. Default ON. Manual searches are unaffected.

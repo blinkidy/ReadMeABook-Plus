@@ -188,6 +188,37 @@ export function IndexersTab({
         />
       </div>
 
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+          Audiobook Codec Preferences
+        </h3>
+        <label htmlFor="xhe-aac-penalty" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          xHE-AAC / USAC score penalty (%)
+        </label>
+        <Input
+          id="xhe-aac-penalty"
+          type="number"
+          min={0}
+          max={100}
+          value={settings.indexerOptions.xheAacPenalty ?? 100}
+          onChange={(e) => {
+            const value = Number(e.target.value);
+            if (Number.isFinite(value)) {
+              onChange({
+                ...settings,
+                indexerOptions: { ...settings.indexerOptions, xheAacPenalty: Math.min(100, Math.max(0, value)) },
+              });
+            }
+          }}
+        />
+        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+          Lowers scores for audiobook releases labeled xHE-AAC or USAC. Default: 100% (score zero,
+          excluded from automatic downloads). Set 0% to disable, or a smaller value to prefer other
+          releases. Interactive search still allows manual selection. Codec labels must appear in
+          the release title; bitrate and sample rate alone do not identify a codec.
+        </p>
+      </div>
+
       {/* Flag Configuration Section */}
       <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
         <div className="mb-4">

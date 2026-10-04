@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requireAdmin, AuthenticatedRequest } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/db';
 import { RMABLogger } from '@/lib/utils/logger';
+import { AUDIO_CODEC_PENALTY_KEY, parseAudioCodecPenalty } from '@/lib/utils/audio-codec';
 
 const logger = RMABLogger.create('API.Admin.Settings');
 
@@ -82,6 +83,7 @@ export async function GET(request: NextRequest) {
         apiKey: maskValue('api_key', configMap.get('prowlarr_api_key')),
       },
       indexerOptions: {
+        xheAacPenalty: parseAudioCodecPenalty(configMap.get(AUDIO_CODEC_PENALTY_KEY)),
         // Default ON: missing or any value other than 'false' is treated as enabled.
         // Must stay in lock-step with /api/admin/settings/indexer-options read contract
         // and any background worker that reads `indexer.skip_unreleased` directly.

@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requireAdmin, AuthenticatedRequest } from '@/lib/middleware/auth';
 import { getConfigService } from '@/lib/services/config.service';
 import { RMABLogger } from '@/lib/utils/logger';
+import { AUDIO_CODEC_PENALTY_KEY, parseAudioCodecPenalty } from '@/lib/utils/audio-codec';
 
 const logger = RMABLogger.create('API.Admin.Settings.IndexerOptions');
 
@@ -40,7 +41,8 @@ export async function GET(request: NextRequest) {
         // Default ON: missing or any value other than 'false' is treated as enabled.
         const skipUnreleased = value !== 'false';
 
-        return NextResponse.json({ skipUnreleased });
+        const xheAacPenalty = parseAudioCodecPenalty(await configService.get(AUDIO_CODEC_PENALTY_KEY));
+        return NextResponse.json({ skipUnreleased, xheAacPenalty });
       } catch (error) {
         logger.error('Failed to fetch indexer options', {
           error: error instanceof Error ? error.message : String(error),
@@ -64,6 +66,13 @@ export async function PUT(request: NextRequest) {
       try {
         const body = await request.json();
         const { skipUnreleased } = body ?? {};
+        const xheAacPenalty = body?.xheAacPenalty;
+        if (xheAacPenalty !== undefined && (
+          typeof xheAacPenalty !== 'number' || !Number.isFinite(xheAacPenalty)
+          || xheAacPenalty < 0 || xheAacPenalty > 100
+        )) {
+          return NextResponse.json({ error: 'xheAacPenalty must be a number from 0 to 100' }, { status: 400 });
+        }
 
         if (typeof skipUnreleased !== 'boolean') {
           return NextResponse.json(
@@ -73,7 +82,7 @@ export async function PUT(request: NextRequest) {
         }
 
         const configService = getConfigService();
-        await configService.setMany([
+        const updates = [
           {
             key: CONFIG_KEY,
             value: String(skipUnreleased),
@@ -81,7 +90,17 @@ export async function PUT(request: NextRequest) {
             description:
               'Skip auto-searches for books with future release dates',
           },
-        ]);
+        ];
+        if (xheAacPenalty !== undefined) {
+          updates.push({
+            key: AUDIO_CODEC_PENALTY_KEY,
+            value: String(xheAacPenalty),
+            category: 'indexer',
+            description: 'Audiobook xHE-AAC / USAC score penalty percentage',
+          });
+        }
+        await configService.setMany(updates);
+        configService.clearCache(AUDIO_CODEC_PENALTY_KEY);
 
         // Explicitly clear cache for the key after write. `setMany` already
         // does this, but we make it visible here to guarantee fresh reads

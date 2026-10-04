@@ -14,6 +14,7 @@ import type { AudibleRegion } from '@/lib/types/audible';
 import { RMABLogger } from '@/lib/utils/logger';
 import { resolveInteractiveSearchAccess } from '@/lib/utils/permissions';
 import { cleanIndexerSearchTitle } from '@/lib/utils/search-title';
+import { AUDIO_CODEC_PENALTY_KEY, parseAudioCodecPenalty } from '@/lib/utils/audio-codec';
 
 const logger = RMABLogger.create('API.InteractiveSearch');
 const MAX_RANKED_RESULTS = 100;
@@ -118,6 +119,7 @@ export async function POST(
       // Get flag configurations
       const flagConfigStr = await configService.get('indexer_flag_config');
       const flagConfigs = flagConfigStr ? JSON.parse(flagConfigStr) : [];
+      const xheAacPenalty = parseAudioCodecPenalty(await configService.get(AUDIO_CODEC_PENALTY_KEY));
 
       // Group indexers by their category configuration
       const { groups, skippedIndexers } = groupIndexersByCategories(indexersConfig);
@@ -210,6 +212,7 @@ export async function POST(
       }, {
         indexerPriorities,
         flagConfigs,
+        xheAacPenalty,
         requireAuthor: false,  // Interactive mode - let user decide
         stopWords: langConfig.stopWords,
         characterReplacements: langConfig.characterReplacements,

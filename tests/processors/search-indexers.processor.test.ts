@@ -40,6 +40,36 @@ describe('processSearchIndexers', () => {
     prismaMock.blockedRelease.findMany.mockResolvedValue([]);
   });
 
+  it.each([100, 0])('uses the saved codec penalty %s for automatic selection', async penalty => {
+    configMock.get.mockImplementation(async (key: string) => {
+      if (key === 'prowlarr_indexers') return JSON.stringify([
+        { id: 1, name: 'Indexer', protocol: 'torrent', priority: 25, categories: [3030] },
+      ]);
+      if (key === 'indexer.xhe_aac_penalty') return String(penalty);
+      return null;
+    });
+    prowlarrMock.searchWithVariations.mockResolvedValue([{
+      indexer: 'Indexer', indexerId: 1, title: 'Book - Author [M4B CBR 95k 44.1kHz USAC]',
+      size: 50 * 1024 * 1024, seeders: 100, publishDate: new Date(),
+      downloadUrl: 'https://example.test/book', guid: 'codec-release', format: 'M4B',
+    }]);
+    prismaMock.request.update.mockResolvedValue({});
+    const { processSearchIndexers } = await import('@/lib/processors/search-indexers.processor');
+    const result = await processSearchIndexers({
+      requestId: 'codec-request', audiobook: { id: 'codec-book', title: 'Book', author: 'Author' },
+    });
+    if (penalty === 100) {
+      expect(result.success).toBe(false);
+      expect(jobQueueMock.addDownloadJob).not.toHaveBeenCalled();
+      expect(prismaMock.request.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ status: 'awaiting_search' }),
+      }));
+    } else {
+      expect(result.success).toBe(true);
+      expect(jobQueueMock.addDownloadJob).toHaveBeenCalled();
+    }
+  });
+
   it('marks request awaiting_search when no results found', async () => {
     configMock.get.mockImplementation(async (key: string) => {
       if (key === 'prowlarr_indexers') {
