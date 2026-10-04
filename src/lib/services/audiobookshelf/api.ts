@@ -71,6 +71,119 @@ export async function getABSLibraries() {
   return result.libraries;
 }
 
+interface ABSLibraryScanState {
+  lastScan?: string | number | null;
+  settings?: {
+    disableWatcher?: boolean;
+  };
+}
+
+interface ImportScanCoordinatorState {
+  pending: boolean;
+  promise: Promise<void>;
+}
+
+export type ABSImportScanResult = 'watcher-active' | 'scan-completed' | 'coalesced';
+
+const IMPORT_SCAN_DEBOUNCE_MS = 250;
+const SCAN_STATUS_POLL_MS = 1000;
+const SCAN_STATUS_TIMEOUT_MS = 10 * 60 * 1000;
+const importScanStates = new Map<string, ImportScanCoordinatorState>();
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function getABSLibraryScanState(libraryId: string): Promise<ABSLibraryScanState> {
+  return absRequest<ABSLibraryScanState>(`/libraries/${libraryId}`);
+}
+
+async function waitForABSScanCompletion(
+  libraryId: string,
+  previousLastScan: string | number | null
+): Promise<void> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < SCAN_STATUS_TIMEOUT_MS) {
+    await sleep(SCAN_STATUS_POLL_MS);
+    const library = await getABSLibraryScanState(libraryId);
+    const currentLastScan = library.lastScan ?? null;
+
+    // Audiobookshelf updates lastScan only after the asynchronous scan finishes.
+    if (currentLastScan !== null && currentLastScan !== previousLastScan) {
+      return;
+    }
+  }
+
+  throw new Error(`Timed out waiting for Audiobookshelf library ${libraryId} scan to finish`);
+}
+
+async function runCoordinatedImportScans(
+  libraryId: string,
+  state: ImportScanCoordinatorState
+): Promise<void> {
+  // Coalesce imports that finish in the same short burst before starting a scan.
+  await sleep(IMPORT_SCAN_DEBOUNCE_MS);
+
+  do {
+    state.pending = false;
+    const libraryBeforeScan = await getABSLibraryScanState(libraryId);
+    const previousLastScan = libraryBeforeScan.lastScan ?? null;
+
+    await triggerABSScan(libraryId);
+    await waitForABSScanCompletion(libraryId, previousLastScan);
+
+    // A request received while the scan was active sets pending=true. Run one
+    // trailing scan so files that arrived after ABS enumerated the library are
+    // not missed.
+  } while (state.pending);
+}
+
+/**
+ * Coordinate scans requested by completed imports.
+ *
+ * Audiobookshelf's watcher already queues filesystem changes, so a full scan
+ * is unnecessary (and can race the watcher) while it is enabled. When the
+ * watcher is disabled, requests are debounced per library and a trailing scan
+ * is guaranteed for imports that arrive during an active scan.
+ */
+export async function triggerABSScanAfterImport(libraryId: string): Promise<ABSImportScanResult> {
+  const library = await getABSLibraryScanState(libraryId);
+
+  if (library.settings?.disableWatcher !== true) {
+    return 'watcher-active';
+  }
+
+  const existingState = importScanStates.get(libraryId);
+  if (existingState) {
+    existingState.pending = true;
+    await existingState.promise;
+    return 'coalesced';
+  }
+
+  const state: ImportScanCoordinatorState = {
+    pending: false,
+    promise: Promise.resolve(),
+  };
+
+  state.promise = runCoordinatedImportScans(libraryId, state);
+  importScanStates.set(libraryId, state);
+
+  try {
+    await state.promise;
+    return 'scan-completed';
+  } finally {
+    if (importScanStates.get(libraryId) === state) {
+      importScanStates.delete(libraryId);
+    }
+  }
+}
+
+/** Test-only reset for module-level coordinator state. */
+export function resetABSImportScanCoordinator(): void {
+  importScanStates.clear();
+}
+
 /**
  * Get all items in a library
  */

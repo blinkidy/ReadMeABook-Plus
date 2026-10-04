@@ -12,6 +12,8 @@ import {
   getABSRecentItems,
   getABSServerInfo,
   searchABSItems,
+  resetABSImportScanCoordinator,
+  triggerABSScanAfterImport,
   triggerABSItemMatch,
   triggerABSScan,
 } from '@/lib/services/audiobookshelf/api';
@@ -29,7 +31,9 @@ vi.mock('@/lib/services/config.service', () => ({
 
 describe('Audiobookshelf API client', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
+    resetABSImportScanCoordinator();
     configServiceMock.get.mockReset();
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
@@ -138,6 +142,102 @@ describe('Audiobookshelf API client', () => {
     expect(fetchMock).toHaveBeenCalledWith('http://abs/api/libraries/lib-1/scan', expect.objectContaining({
       method: 'POST',
     }));
+  });
+
+  it('relies on the Audiobookshelf watcher instead of starting a redundant import scan', async () => {
+    configServiceMock.get.mockImplementation(async (key: string) => {
+      if (key === 'audiobookshelf.server_url') return 'http://abs';
+      if (key === 'audiobookshelf.api_token') return 'token';
+      return null;
+    });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ lastScan: 10, settings: { disableWatcher: false } }),
+    });
+
+    await expect(triggerABSScanAfterImport('lib-1')).resolves.toBe('watcher-active');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/scan'),
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('debounces simultaneous import scan requests when the watcher is disabled', async () => {
+    vi.useFakeTimers();
+    configServiceMock.get.mockImplementation(async (key: string) => {
+      if (key === 'audiobookshelf.server_url') return 'http://abs';
+      if (key === 'audiobookshelf.api_token') return 'token';
+      return null;
+    });
+
+    let scanPosts = 0;
+    fetchMock.mockImplementation(async (_url: string, options: { method?: string }) => {
+      if (options.method === 'POST') {
+        scanPosts += 1;
+        return { ok: true, text: async () => 'OK' };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          lastScan: scanPosts === 0 ? 10 : 11,
+          settings: { disableWatcher: true },
+        }),
+      };
+    });
+
+    const first = triggerABSScanAfterImport('lib-1');
+    const second = triggerABSScanAfterImport('lib-1');
+    await vi.runAllTimersAsync();
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      'scan-completed',
+      'coalesced',
+    ]);
+    expect(scanPosts).toBe(1);
+  });
+
+  it('runs a trailing scan when an import arrives during an active scan', async () => {
+    vi.useFakeTimers();
+    configServiceMock.get.mockImplementation(async (key: string) => {
+      if (key === 'audiobookshelf.server_url') return 'http://abs';
+      if (key === 'audiobookshelf.api_token') return 'token';
+      return null;
+    });
+
+    let scanPosts = 0;
+    let completedScans = 0;
+    fetchMock.mockImplementation(async (_url: string, options: { method?: string }) => {
+      if (options.method === 'POST') {
+        scanPosts += 1;
+        return { ok: true, text: async () => 'OK' };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          lastScan: completedScans,
+          settings: { disableWatcher: true },
+        }),
+      };
+    });
+
+    const first = triggerABSScanAfterImport('lib-1');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(scanPosts).toBe(1);
+
+    const second = triggerABSScanAfterImport('lib-1');
+    completedScans = 1;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(scanPosts).toBe(2);
+
+    completedScans = 2;
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      'scan-completed',
+      'coalesced',
+    ]);
   });
 
   it('includes ASIN overrides in metadata match requests with US region', async () => {
